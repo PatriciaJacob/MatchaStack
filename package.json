@@ -1,5 +1,14 @@
 {
-  "name": "MatchaStack",
+  "name": "matchastack",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "matcha": "./dist/bin/matcha.js"
+  },
+  "scripts": {
+    "build": "npx tsc && node dist/bin/matcha.js build",
+    "matcha": "node dist/bin/matcha.js"
+  },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
