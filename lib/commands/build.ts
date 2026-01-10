@@ -66,3 +66,19 @@ export async function build(options: BuildOptions = {}) {
   console.log(`[build] Written to ${outputPath}`);
   return { outputPath, html: finalHtml };
 }
+
+// CLI command
+export const description = 'Compile TypeScript and generate static HTML';
+
+export async function run() {
+  console.log('[matcha] Building...\n');
+
+  try {
+    const result = await build();
+    console.log(result.html);
+    console.log('\n[matcha] Build complete!');
+  } catch (err) {
+    console.error('[matcha] Build failed:', err);
+    process.exit(1);
+  }
+}
