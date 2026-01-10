@@ -6,7 +6,7 @@
     "matcha": "./dist/bin/matcha.js"
   },
   "scripts": {
-    "build": "npx tsc && node dist/bin/matcha.js build",
+    "build": "npx tsc",
     "matcha": "node dist/bin/matcha.js"
   },
   "dependencies": {
