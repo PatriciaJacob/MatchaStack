@@ -22,9 +22,13 @@ export async function run() {
 
     try {
       const content = await readFile(filePath);
+      // if (ext === '.js') {
+      //   await new Promise((resolve) => setTimeout(resolve, 2000));
+      // }
       res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
       res.end(content);
-    } catch {
+    } catch (e) {
+      console.error(e);
       res.writeHead(404);
       res.end('Not found');
     }

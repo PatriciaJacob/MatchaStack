@@ -1,10 +1,5 @@
 import React from 'react';
-import fs from 'node:fs';
 
-// Static content - will break client bundle later (getStaticProps motivation)
-const myBlog = fs.readFileSync('static/blog.md', 'utf8');
-
-// Interactive component - renders but won't work without hydration
 function Counter() {
   const [count, setCount] = React.useState(0);
 
@@ -16,12 +11,14 @@ function Counter() {
 }
 
 function App() {
+  const [content, setContent] = React.useState('initial');
   return (
     <div>
       <h1>MatchaStack</h1>
+      <input type="text" value={content} placeholder="Type before hydration..."
+        onChange={(e) => setContent(e.target.value)} className="bg-blue-500 text-white px-4 py-2 rounded-md" />
+      <p>{content}</p>
       <Counter />
-      <hr />
-      <p>{myBlog}</p>
     </div>
   );
 }

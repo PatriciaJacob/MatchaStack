@@ -17,6 +17,7 @@ import { createElement } from 'react';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import * as esbuild from 'esbuild';
 
 export interface BuildOptions {
   /** Path to the app entry point source file (default: 'app/app') */
@@ -37,7 +38,16 @@ export async function build(options: BuildOptions = {}) {
   console.log('[build] Compiling TypeScript...');
   execSync('npx tsc', { stdio: 'inherit' });
 
-  // Step 2: Dynamically import the compiled app component
+  // Step 2: Bundle entry-client with esbuild
+  console.log('[build] Bundling client entry...');
+  await esbuild.build({
+    entryPoints: ['app/entry-client.tsx'],
+    bundle: true,
+    outfile: 'dist/entry-client.js',
+    format: 'esm',
+  });
+
+  // Step 3: Dynamically import the compiled app component
   // Convert source path to compiled path (app/app -> dist/app/app.js)
   const compiledPath = path.resolve(process.cwd(), 'dist', `${appEntry}.js`);
   const appUrl = pathToFileURL(compiledPath).href;
@@ -46,17 +56,23 @@ export async function build(options: BuildOptions = {}) {
   const AppModule = await import(appUrl);
   const App = AppModule.default || AppModule;
 
-  // Step 3: Read the HTML template
+  // Step 4: Read the HTML template
   const html = fs.readFileSync(templatePath, 'utf8');
 
-  // Step 4: Render React component to static HTML string
+  // Step 5: Render React component to static HTML string
   console.log('[build] Rendering to static HTML...');
   const appHtml = renderToString(createElement(App));
 
-  // Step 5: Inject rendered HTML into template
-  const finalHtml = html.replace('{{app-holder}}', appHtml);
+  // Step 6: Inject rendered HTML into template
+  const htmlWithApp = html.replace('{{app-holder}}', `<div id="root">${appHtml}</div>`);
 
-  // Step 6: Ensure output directory exists and write
+  // Step 7: Inject client script into template
+  const finalHtml = htmlWithApp.replace(
+    '{{client-script-holder}}',
+    '<script type="module" src="./entry-client.js"></script>'
+  );
+
+  // Step 8: Ensure output directory exists and write
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
