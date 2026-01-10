@@ -7,7 +7,7 @@ A learning project: building a React metaframework from scratch.
 | # | Pattern | Status |
 |---|---------|--------|
 | 1 | SSG | Done |
-| 2 | Hydration | - |
+| 2 | Hydration | Done |
 | 3 | getStaticProps | - |
 | 4 | SSR + Loaders | - |
 | 5 | RSC | - |

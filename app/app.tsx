@@ -1,5 +1,11 @@
 import React from 'react';
 
+
+// Should only run on the server
+import fs from 'node:fs';
+const myBlog = fs.readFileSync('static/blog.md', 'utf8').split('\n');
+// server-only
+
 function Counter() {
   const [count, setCount] = React.useState(0);
 

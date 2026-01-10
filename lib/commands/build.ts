@@ -40,12 +40,7 @@ export async function build(options: BuildOptions = {}) {
 
   // Step 2: Bundle entry-client with esbuild
   console.log('[build] Bundling client entry...');
-  await esbuild.build({
-    entryPoints: ['app/entry-client.tsx'],
-    bundle: true,
-    outfile: 'dist/entry-client.js',
-    format: 'esm',
-  });
+  // TODO: run vite build
 
   // Step 3: Dynamically import the compiled app component
   // Convert source path to compiled path (app/app -> dist/app/app.js)
