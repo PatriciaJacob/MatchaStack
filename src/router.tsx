@@ -12,7 +12,7 @@ export interface Route {
 
 export interface RouterContextValue {
   path: string;
-  navigate: (to: string) => void;
+  navigate: (to: string) => Promise<void>;
 }
 
 // --- Context ---
@@ -30,19 +30,55 @@ export function useRouter(): RouterContextValue {
 interface RouterProps {
   routes: Route[];
   initialPath: string;
+  initialProps?: RouteProps;
 }
 
-export function Router({ routes, initialPath }: RouterProps) {
-  const [path, setPath] = React.useState(initialPath);
+async function fetchRouteProps(path: string): Promise<RouteProps> {
+  const propsUrl = path === '/' ? '/_props.json' : `${path}/_props.json`;
+  try {
+    const res = await fetch(propsUrl);
+    if (res.ok) {
+      return await res.json() as RouteProps;
+    }
+  } catch {
+    // Props fetch failed, continue without props
+  }
+  return {};
+}
 
-  const navigate = React.useCallback((to: string) => {
-    window.history.pushState({}, '', to);
-    setPath(to);
+export function Router({ routes, initialPath, initialProps }: RouterProps) {
+  const [path, setPath] = React.useState(initialPath);
+  const [props, setProps] = React.useState<RouteProps>(initialProps ?? {});
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  const navigate = React.useCallback(async (to: string) => {
+    const normalized = normalizePath(to);
+    
+    setIsLoading(true);
+    const newProps = await fetchRouteProps(normalized);
+    
+    window.history.pushState({ props: newProps }, '', to);
+    setPath(normalized);
+    setProps(newProps);
+    setIsLoading(false);
   }, []);
 
   // Handle browser back/forward
   React.useEffect(() => {
-    const onPopState = () => setPath(window.location.pathname);
+    const onPopState = async (e: PopStateEvent) => {
+      const newPath = normalizePath(window.location.pathname);
+      setPath(newPath);
+      
+      // Use cached props from history state, or fetch
+      if (e.state?.props) {
+        setProps(e.state.props as RouteProps);
+      } else {
+        setIsLoading(true);
+        const newProps = await fetchRouteProps(newPath);
+        setProps(newProps);
+        setIsLoading(false);
+      }
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -56,7 +92,7 @@ export function Router({ routes, initialPath }: RouterProps) {
 
   return (
     <RouterContext.Provider value={{ path, navigate }}>
-      <Component />
+      {isLoading ? <div>Loading...</div> : <Component {...props} />}
     </RouterContext.Provider>
   );
 }
@@ -85,6 +121,12 @@ export function Link({ to, children, ...rest }: LinkProps) {
 
 // --- Utils ---
 
+function normalizePath(path: string): string {
+  // Remove trailing slash (except for root)
+  return path === '/' ? path : path.replace(/\/$/, '');
+}
+
 export function matchRoute(routes: Route[], path: string): Route | undefined {
-  return routes.find((r) => r.path === path);
+  const normalized = normalizePath(path);
+  return routes.find((r) => r.path === normalized);
 }
