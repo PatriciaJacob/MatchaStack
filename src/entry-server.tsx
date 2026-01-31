@@ -1,14 +1,21 @@
-import * as React from 'react';
-import { renderToString } from "react-dom/server";
-
+import { renderToString } from 'react-dom/server';
 import App from './app.js';
+import { matchRoute, RouteProps } from './router.js';
+import { routes } from './routes.js';
 
-export function render(_url: string) {
-  // call your SSR function or API here and pass the result as props
-  const html = renderToString(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-  return { html };
+// Re-export routes so plugin can access them
+export { routes };
+
+export async function render(url: string) {
+  const route = matchRoute(routes, url);
+  let props: RouteProps = {};
+
+  if (route?.getStaticProps) {
+    const result = await route.getStaticProps();
+    // Support { props: { ... } } format (Next.js style)
+    props = 'props' in result ? (result as { props: RouteProps }).props : result;
+  }
+
+  const html = renderToString(<App path={url} props={props} />);
+  return { html, props };
 }
