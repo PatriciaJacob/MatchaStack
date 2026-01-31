@@ -1,13 +1,28 @@
 {
-  "name": "MatchaStack",
+  "name": "matchastack",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "matcha": "./dist/bin/matcha.js"
+  },
+  "scripts": {
+    "build": "tsc && vite build",
+    "build:cli": "tsc",
+    "matcha": "node dist/bin/matcha.js"
+  },
   "dependencies": {
+    "esbuild": "^0.27.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "express": "^5.2.1"
   }
 }
