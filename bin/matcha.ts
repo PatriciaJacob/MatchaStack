@@ -4,16 +4,18 @@
  * MatchaStack CLI
  *
  * Usage:
- *   matcha build    - Compile TypeScript and generate static HTML
- *   matcha serve    - Serve the dist/ folder
+ *   matcha dev      - Start dev server with HMR and SSR
+ *   matcha build    - Build for production (SSG)
+ *   matcha serve    - Serve built static files
  *   matcha help     - Show this help message
  */
 
-import { buildCmd, serveCmd, helpCmd } from '../lib/commands/index.js';
+import { buildCmd, devCmd, serveCmd, helpCmd } from '../lib/commands/index.js';
 import type { Command } from '../lib/commands/types.js';
 
 // Command definitions - easy to extend
 const commands: Record<string, Command> = {
+  dev: devCmd,
   build: buildCmd,
   serve: serveCmd,
   help: {

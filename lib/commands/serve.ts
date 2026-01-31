@@ -1,40 +1,21 @@
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import express from 'express';
 
-export const description = 'Serve the dist/ folder';
+export const description = 'Serve the built static files from dist/public/';
 
 export async function run() {
-  const port = 3000;
-  const distDir = path.resolve(process.cwd(), 'dist');
+  const app = express();
+  const root = process.cwd();
+  const distPath = path.resolve(root, 'dist/public');
 
-  const mimeTypes: Record<string, string> = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.json': 'application/json',
-  };
+  app.use(express.static(distPath));
 
-  const server = createServer(async (req, res) => {
-    const url = req.url === '/' ? '/index.html' : req.url!;
-    const filePath = path.join(distDir, url);
-    const ext = path.extname(filePath);
-
-    try {
-      const content = await readFile(filePath);
-      // if (ext === '.js') {
-      //   await new Promise((resolve) => setTimeout(resolve, 2000));
-      // }
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
-      res.end(content);
-    } catch (e) {
-      console.error(e);
-      res.writeHead(404);
-      res.end('Not found');
-    }
+  // Fallback to index.html for SPA routing
+  app.use('*all', (_req, res) => {
+    res.sendFile(path.resolve(distPath, 'index.html'));
   });
 
-  server.listen(port, () => {
-    console.log(`[matcha] Serving dist/ at http://localhost:${port}`);
+  app.listen(3000, () => {
+    console.log('Serving dist/public/ at http://localhost:3000');
   });
 }

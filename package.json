@@ -6,9 +6,9 @@
     "matcha": "./dist/bin/matcha.js"
   },
   "scripts": {
-    "build": "npx tsc",
-    "matcha": "node dist/bin/matcha.js",
-    "vite-build": "vite build"
+    "build": "tsc && vite build",
+    "build:cli": "tsc",
+    "matcha": "node dist/bin/matcha.js"
   },
   "dependencies": {
     "esbuild": "^0.27.2",
@@ -18,8 +18,11 @@
     "vite": "^7.3.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "express": "^5.2.1"
   }
 }

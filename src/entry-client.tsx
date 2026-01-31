@@ -3,8 +3,7 @@ import * as ReactDOM from 'react-dom/client';
 
 import App from './app.js';
 
-ReactDOM.hydrateRoot(
-  document.getElementById('root')!,
+ReactDOM.hydrateRoot(document.getElementById('app')!,
   <React.StrictMode>
     <App />
   </React.StrictMode>
