@@ -1,31 +1,15 @@
-import React from 'react';
+import * as React from 'react';
+import { Router } from './router.js';
+import { routes } from './routes.js';
 
-
-// Should only run on the server
-//   import fs from 'node:fs';
-//   const myBlog = fs.readFileSync('static/blog.md', 'utf8').split('\n');
-
-function Counter() {
-  const [count, setCount] = React.useState(0);
-
-  return (
-    <button onClick={() => setCount(count + 1)}>
-      Clicked {count} times
-    </button>
-  );
+interface AppProps {
+  path: string;
 }
 
-function App() {
-  const [content, setContent] = React.useState('initial');
+export default function App({ path }: AppProps) {
   return (
-    <div>
-      <h1>MatchaStack</h1>
-      <input type="text" value={content} placeholder="Type before hydration..."
-        onChange={(e) => setContent(e.target.value)} className="bg-blue-500 text-white px-4 py-2 rounded-md" />
-      <p>{content}</p>
-      <Counter />
-    </div>
+    <React.StrictMode>
+      <Router routes={routes} initialPath={path} />
+    </React.StrictMode>
   );
 }
-
-export default App;
