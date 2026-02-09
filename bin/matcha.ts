@@ -5,8 +5,8 @@
  *
  * Usage:
  *   matcha dev      - Start dev server with HMR and SSR
- *   matcha build    - Build for production (SSG)
- *   matcha serve    - Serve built static files
+ *   matcha build    - Build for production (static + SSR function output)
+ *   matcha serve    - Serve built output with SSR runtime
  *   matcha help     - Show this help message
  */
 
