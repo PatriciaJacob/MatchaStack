@@ -34,8 +34,16 @@ interface RouterProps {
   initialProps?: RouteProps;
 }
 
+function getSsrRoutes(): string[] {
+  if (typeof window === 'undefined') return [];
+  const value = (window as Window & { __MATCHA_SSR_ROUTES__?: unknown }).__MATCHA_SSR_ROUTES__;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
 async function fetchRouteProps(path: string): Promise<RouteProps> {
-  if (import.meta.env.DEV) {
+  const shouldUseRuntimeProps = import.meta.env.DEV || getSsrRoutes().includes(path);
+
+  if (shouldUseRuntimeProps) {
     try {
       const devPropsUrl = `/__matcha_props?path=${encodeURIComponent(path)}`;
       const res = await fetch(devPropsUrl, { cache: 'no-store' });

@@ -26,8 +26,12 @@ export async function run() {
     }
 
     try {
-      const { loadProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
-      const props = await loadProps(routePath);
+      const parsedPath = new URL(routePath, 'http://localhost').pathname;
+      const { loadStaticProps, loadServerSideProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      const props = {
+        ...(await loadStaticProps(parsedPath)),
+        ...(await loadServerSideProps(parsedPath)),
+      };
 
       res
         .status(200)
@@ -56,14 +60,20 @@ export async function run() {
       template = await vite.transformIndexHtml(url, template);
 
       // 3. Load server entry via Vite (enables HMR for SSR)
-      const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
 
       // 4. Render the app
       const { html: appHtml, props } = await render(requestUrl.pathname);
 
       // 5. Inject rendered HTML
       const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props)}</script>`;
-      const html = template.replace('<!--ssr-outlet-->', appHtml).replace('</head>', `${propsScript}</head>`);
+      const ssrRoutes = (routes as Array<{ path: string; getServerSideProps?: unknown }>)
+        .filter((route) => Boolean(route.getServerSideProps))
+        .map((route) => route.path);
+      const ssrRoutesScript = `<script>window.__MATCHA_SSR_ROUTES__=${JSON.stringify(ssrRoutes)}</script>`;
+      const html = template
+        .replace('<!--ssr-outlet-->', appHtml)
+        .replace('</head>', `${propsScript}${ssrRoutesScript}</head>`);
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
     } catch (e) {
