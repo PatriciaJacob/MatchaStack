@@ -55,17 +55,17 @@ export default function matcha(): Plugin {
             isSsr = Boolean(config.build.ssr);
         },
 
-        transform(code, id) {
-            // Only strip on client builds, only for src/ files
-            if (isSsr) return;
-            if (!id.includes('/src/')) return;
-            if (!id.match(/\.(tsx?|jsx?)$/)) return;
-
-            const stripped = stripServerCode(code);
-            if (stripped !== code) {
-                return { code: stripped, map: null };
-            }
-        },
+        // transform(code, id) {
+        //     // Only strip on client builds, only for src/ files
+        //     if (isSsr) return;
+        //     if (!id.includes('/src/')) return;
+        //     if (!id.match(/\.(tsx?|jsx?)$/)) return;
+        //
+        //     const stripped = stripServerCode(code);
+        //     if (stripped !== code) {
+        //         return { code: stripped, map: null };
+        //     }
+        // },
 
         async closeBundle() {
             const distDir = resolve(root, outDir);

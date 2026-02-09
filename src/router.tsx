@@ -8,6 +8,7 @@ export interface Route {
   path: string;
   component: React.ComponentType<RouteProps>;
   getStaticProps?: () => RouteProps | Promise<RouteProps>;
+  getServerSideProps?: () => RouteProps | Promise<RouteProps>;
 }
 
 export interface RouterContextValue {
@@ -53,10 +54,10 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
 
   const navigate = React.useCallback(async (to: string) => {
     const normalized = normalizePath(to);
-    
+
     setIsLoading(true);
     const newProps = await fetchRouteProps(normalized);
-    
+
     window.history.pushState({ props: newProps }, '', to);
     setPath(normalized);
     setProps(newProps);
@@ -68,7 +69,7 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
     const onPopState = async (e: PopStateEvent) => {
       const newPath = normalizePath(window.location.pathname);
       setPath(newPath);
-      
+
       // Use cached props from history state, or fetch
       if (e.state?.props) {
         setProps(e.state.props as RouteProps);

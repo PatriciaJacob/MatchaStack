@@ -23,17 +23,25 @@ export async function run() {
       // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
 
+      console.log('1', template);
+
       // 2. Apply Vite HTML transforms (injects HMR client, etc.)
       template = await vite.transformIndexHtml(url, template);
 
+      console.log('2', template);
+
       // 3. Load server entry via Vite (enables HMR for SSR)
       const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      console.log('3', render);
 
       // 4. Render the app
-      const { html: appHtml } = render(url);
+      const { html: appHtml, props } = await render(url);
+
+      console.log('4', appHtml);
 
       // 5. Inject rendered HTML
-      const html = template.replace('<!--ssr-outlet-->', appHtml);
+      const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props)}</script>`;
+      const html = template.replace('<!--ssr-outlet-->', appHtml).replace('</head>', `${propsScript}</head>`);
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
     } catch (e) {
