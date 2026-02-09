@@ -16,28 +16,50 @@ export async function run() {
 
   app.use(vite.middlewares);
 
+  app.get('/__matcha_props', async (req, res) => {
+    const rawPath = req.query.path;
+    const routePath = typeof rawPath === 'string' ? rawPath : '/';
+
+    if (!routePath.startsWith('/')) {
+      res.status(400).json({ error: 'Invalid path' });
+      return;
+    }
+
+    try {
+      const { loadProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      const props = await loadProps(routePath);
+
+      res
+        .status(200)
+        .set({
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        })
+        .end(JSON.stringify(props));
+    } catch (e) {
+      vite.ssrFixStacktrace(e as Error);
+      console.error(e);
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
   app.use('*all', async (req, res) => {
     const url = req.originalUrl;
 
     try {
+      const requestUrl = new URL(url, 'http://localhost');
+
       // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
-
-      console.log('1', template);
 
       // 2. Apply Vite HTML transforms (injects HMR client, etc.)
       template = await vite.transformIndexHtml(url, template);
 
-      console.log('2', template);
-
       // 3. Load server entry via Vite (enables HMR for SSR)
       const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
-      console.log('3', render);
 
       // 4. Render the app
-      const { html: appHtml, props } = await render(url);
-
-      console.log('4', appHtml);
+      const { html: appHtml, props } = await render(requestUrl.pathname);
 
       // 5. Inject rendered HTML
       const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props)}</script>`;
@@ -55,4 +77,3 @@ export async function run() {
     console.log('Dev server running at http://localhost:3000');
   });
 }
-

@@ -35,6 +35,18 @@ interface RouterProps {
 }
 
 async function fetchRouteProps(path: string): Promise<RouteProps> {
+  if (import.meta.env.DEV) {
+    try {
+      const devPropsUrl = `/__matcha_props?path=${encodeURIComponent(path)}`;
+      const res = await fetch(devPropsUrl, { cache: 'no-store' });
+      if (res.ok) {
+        return await res.json() as RouteProps;
+      }
+    } catch {
+      // Dev props endpoint failed, fall through to static props.
+    }
+  }
+
   const propsUrl = path === '/' ? '/_props.json' : `${path}/_props.json`;
   try {
     const res = await fetch(propsUrl);
