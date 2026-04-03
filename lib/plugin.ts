@@ -1,10 +1,11 @@
 import { Plugin, build } from 'vite';
-import { readFile, writeFile, rm, mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 interface Route {
     path: string;
+    getServerSideProps?: unknown;
 }
 
 interface RenderResult {
@@ -29,11 +30,18 @@ function stripServerCode(code: string): string {
         /^export\s+(async\s+)?function\s+getStaticProps[\s\S]*?^\}\n/gm,
         ''
     );
+    code = code.replace(
+        /^export\s+const\s+getServerSideProps\s*=[\s\S]*?^\};?\n/gm,
+        ''
+    );
+    code = code.replace(
+        /^export\s+(async\s+)?function\s+getServerSideProps[\s\S]*?^\}\n/gm,
+        ''
+    );
 
     // Remove getStaticProps from route objects and imports
-    code = code.replace(/,?\s*getStaticProps:\s*\w+/g, '');
-    code = code.replace(/,\s*\{\s*getStaticProps\s+as\s+\w+\s*\}/g, '');
-    code = code.replace(/\{\s*getStaticProps\s+as\s+\w+\s*\},?\s*/g, '');
+    code = code.replace(/,?\s*getStaticProps:\s*[^,}]+/g, '');
+    code = code.replace(/,?\s*getServerSideProps:\s*[^,}]+/g, ', hasServerSideProps: true');
 
     // Remove Node.js built-in imports (now unused after stripping getStaticProps)
     code = code.replace(/^import\s+.*\s+from\s+['"]node:.*['"];?\n/gm, '');
@@ -74,7 +82,7 @@ export default function matcha(): Plugin {
 
         async closeBundle() {
             const distDir = resolve(root, outDir);
-            const serverOutDir = resolve(distDir, 'server');
+            const serverOutDir = resolve(distDir, '..', 'server');
 
             // 1. Build server entry (SSR build)
             await build({
@@ -102,9 +110,16 @@ export default function matcha(): Plugin {
             // 3. Read the template
             const templatePath = resolve(distDir, 'index.html');
             const template = await readFile(templatePath, 'utf-8');
+            const runtimeTemplatePath = resolve(distDir, '_template.html');
+            await writeFile(runtimeTemplatePath, template);
 
             // 4. Render each route
             for (const route of routes) {
+                if (route.getServerSideProps) {
+                    console.log(`[matcha] skipping SSR route at build time: ${route.path}`);
+                    continue;
+                }
+
                 const { html: appHtml, props } = await render(route.path);
 
                 // Determine output directory
@@ -131,10 +146,7 @@ export default function matcha(): Plugin {
                 console.log(`[matcha] ${route.path} → ${htmlPath.replace(root + '/', '')}`);
             }
 
-            // 5. Clean up server build
-            await rm(serverOutDir, { recursive: true });
-
-            console.log(`[matcha] SSG complete: ${routes.length} pages`);
+            console.log(`[matcha] Build complete: ${routes.length} routes processed`);
         },
     };
 }

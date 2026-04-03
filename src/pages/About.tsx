@@ -22,6 +22,8 @@ export default function About(props: AboutProps) {
       </div>
       <nav>
         <Link to="/">Go Home</Link>
+        {' | '}
+        <Link to="/server?name=About">Visit Server Page</Link>
       </nav>
     </div>
   );
