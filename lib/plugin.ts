@@ -45,6 +45,7 @@ export default function matcha(): Plugin {
     let root: string;
     let outDir: string;
     let isSsr: boolean;
+    let command: 'build' | 'serve';
 
     return {
         name: 'matcha',
@@ -53,10 +54,14 @@ export default function matcha(): Plugin {
             root = config.root;
             outDir = config.build.outDir;
             isSsr = Boolean(config.build.ssr);
+            command = config.command;
         },
 
         transform(code, id) {
-            // Only strip on client builds, only for src/ files
+            // Only strip on production client builds, only for src/ files.
+            // In dev, Vite uses the same source modules for ssrLoadModule(),
+            // so stripping here would remove server data loaders too.
+            if (command !== 'build') return;
             if (isSsr) return;
             if (!id.includes('/src/')) return;
             if (!id.match(/\.(tsx?|jsx?)$/)) return;

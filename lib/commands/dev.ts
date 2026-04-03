@@ -17,23 +17,29 @@ export async function run() {
   app.use(vite.middlewares);
 
   app.use('*all', async (req, res) => {
-    const url = req.originalUrl;
+    const url = new URL(req.originalUrl, 'http://localhost');
+    const pathname = url.pathname;
 
     try {
       // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
 
       // 2. Apply Vite HTML transforms (injects HMR client, etc.)
-      template = await vite.transformIndexHtml(url, template);
+      template = await vite.transformIndexHtml(req.originalUrl, template);
 
       // 3. Load server entry via Vite (enables HMR for SSR)
       const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
 
       // 4. Render the app
-      const { html: appHtml } = render(url);
+      const { html: appHtml, props } = await render(pathname);
 
-      // 5. Inject rendered HTML
-      const html = template.replace('<!--ssr-outlet-->', appHtml);
+      // Serialize initial props so the client hydrates with the same data.
+      const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
+
+      // 5. Inject rendered HTML and initial props
+      const html = template
+        .replace('<!--ssr-outlet-->', appHtml)
+        .replace('</head>', `${propsScript}</head>`);
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
     } catch (e) {
@@ -47,4 +53,3 @@ export async function run() {
     console.log('Dev server running at http://localhost:3000');
   });
 }
-
