@@ -8,6 +8,7 @@ export interface Route {
   path: string;
   component: React.ComponentType<RouteProps>;
   getStaticProps?: () => RouteProps | Promise<RouteProps>;
+  getServerSideProps?: () => RouteProps | Promise<RouteProps>;
 }
 
 export interface RouterContextValue {
@@ -33,7 +34,27 @@ interface RouterProps {
   initialProps?: RouteProps;
 }
 
+function getSsrRoutes(): string[] {
+  if (typeof window === 'undefined') return [];
+  const value = (window as Window & { __MATCHA_SSR_ROUTES__?: unknown }).__MATCHA_SSR_ROUTES__;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
 async function fetchRouteProps(path: string): Promise<RouteProps> {
+  const shouldUseRuntimeProps = import.meta.env.DEV || getSsrRoutes().includes(path);
+
+  if (shouldUseRuntimeProps) {
+    try {
+      const devPropsUrl = `/__matcha_props?path=${encodeURIComponent(path)}`;
+      const res = await fetch(devPropsUrl, { cache: 'no-store' });
+      if (res.ok) {
+        return await res.json() as RouteProps;
+      }
+    } catch {
+      // Dev props endpoint failed, fall through to static props.
+    }
+  }
+
   const propsUrl = path === '/' ? '/_props.json' : `${path}/_props.json`;
   try {
     const res = await fetch(propsUrl);
@@ -53,10 +74,10 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
 
   const navigate = React.useCallback(async (to: string) => {
     const normalized = normalizePath(to);
-    
+
     setIsLoading(true);
     const newProps = await fetchRouteProps(normalized);
-    
+
     window.history.pushState({ props: newProps }, '', to);
     setPath(normalized);
     setProps(newProps);
@@ -68,7 +89,7 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
     const onPopState = async (e: PopStateEvent) => {
       const newPath = normalizePath(window.location.pathname);
       setPath(newPath);
-      
+
       // Use cached props from history state, or fetch
       if (e.state?.props) {
         setProps(e.state.props as RouteProps);

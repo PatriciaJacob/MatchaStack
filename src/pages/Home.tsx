@@ -27,6 +27,8 @@ export default function Home() {
       <Counter />
       <nav>
         <Link to="/about">Go to About</Link>
+        {' | '}
+        <Link to="/user-profile">View User Sample</Link>
       </nav>
     </div>
   );
