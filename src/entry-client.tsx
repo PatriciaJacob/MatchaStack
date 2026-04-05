@@ -4,6 +4,7 @@ import App from './app.js';
 declare global {
   interface Window {
     __INITIAL_PROPS__?: Record<string, unknown>;
+    __MATCHA_SSR_ROUTES__?: string[];
   }
 }
 

@@ -28,7 +28,7 @@ export default function Home() {
       <nav>
         <Link to="/about">Go to About</Link>
         {' | '}
-        <Link to="/server?name=Matcha">Go to Server Page</Link>
+        <Link to="/user-profile">View User Sample</Link>
       </nav>
     </div>
   );

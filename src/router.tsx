@@ -44,6 +44,12 @@ interface RouterProps {
   initialProps?: RouteProps;
 }
 
+function getSsrRoutes(): string[] {
+  if (typeof window === 'undefined') return [];
+  const value = (window as Window & { __MATCHA_SSR_ROUTES__?: unknown }).__MATCHA_SSR_ROUTES__;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
 function parseTarget(target: string): { path: string; url: string } {
   const parsed = new URL(target, window.location.origin);
   const path = normalizePath(parsed.pathname);
@@ -54,19 +60,23 @@ function parseTarget(target: string): { path: string; url: string } {
   };
 }
 
-async function fetchRouteProps(route: Route | undefined, url: string): Promise<RouteProps> {
-  const { path } = parseTarget(url);
+async function fetchRouteProps(route: Route | undefined, target: string): Promise<RouteProps> {
+  const { path, url } = parseTarget(target);
+  const shouldUseRuntimeProps =
+    import.meta.env.DEV ||
+    getSsrRoutes().includes(path) ||
+    Boolean(route?.hasServerSideProps || route?.getServerSideProps);
 
-  if (route?.hasServerSideProps || route?.getServerSideProps) {
+  if (shouldUseRuntimeProps) {
     try {
-      const res = await fetch(`/_matcha/data?url=${encodeURIComponent(url)}`);
+      const runtimePropsUrl = `/__matcha_props?path=${encodeURIComponent(url)}`;
+      const res = await fetch(runtimePropsUrl, { cache: 'no-store' });
       if (res.ok) {
         return await res.json() as RouteProps;
       }
     } catch {
-      // Props fetch failed, continue without props
+      // Runtime props endpoint failed, fall through to static props.
     }
-    return {};
   }
 
   const propsUrl = path === '/' ? '/_props.json' : `${path}/_props.json`;
@@ -104,7 +114,6 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
     const onPopState = async (e: PopStateEvent) => {
       const { path: nextPath, url } = parseTarget(window.location.href);
       const route = matchRoute(routes, nextPath);
-
       setPath(nextPath);
 
       // Use cached props from history state, or fetch

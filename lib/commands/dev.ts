@@ -14,22 +14,29 @@ export async function run() {
     appType: 'custom',
   });
 
-  app.get('/_matcha/data', async (req, res) => {
-    const target = typeof req.query.url === 'string' ? req.query.url : null;
+  app.get('/__matcha_props', async (req, res) => {
+    const rawPath = req.query.path;
+    const routePath = typeof rawPath === 'string' ? rawPath : '/';
 
-    if (!target) {
-      return res.status(400).json({ error: 'Missing url query parameter' });
+    if (!routePath.startsWith('/')) {
+      res.status(400).json({ error: 'Invalid path' });
+      return;
     }
 
     try {
-      const { getRouteData } = await vite.ssrLoadModule('/src/entry-server.tsx');
-      const { route, props } = await getRouteData(target);
+      const { loadStaticProps, loadServerSideProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      const props = {
+        ...(await loadStaticProps(routePath)),
+        ...(await loadServerSideProps(routePath)),
+      };
 
-      if (!route?.getServerSideProps) {
-        return res.status(404).json({ error: 'No getServerSideProps for route' });
-      }
-
-      res.status(200).json(props);
+      res
+        .status(200)
+        .set({
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        })
+        .end(JSON.stringify(props));
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       console.error(e);
@@ -40,26 +47,30 @@ export async function run() {
   app.use(vite.middlewares);
 
   app.use('*all', async (req, res) => {
+    const url = req.originalUrl;
+
     try {
       // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
 
       // 2. Apply Vite HTML transforms (injects HMR client, etc.)
-      template = await vite.transformIndexHtml(req.originalUrl, template);
+      template = await vite.transformIndexHtml(url, template);
 
       // 3. Load server entry via Vite (enables HMR for SSR)
-      const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
 
       // 4. Render the app
-      const { html: appHtml, props } = await render(req.originalUrl);
+      const { html: appHtml, props } = await render(url);
 
-      // Serialize initial props so the client hydrates with the same data.
+      // 5. Inject rendered HTML
       const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
-
-      // 5. Inject rendered HTML and initial props
+      const ssrRoutes = (routes as Array<{ path: string; getServerSideProps?: unknown }>)
+        .filter((route) => Boolean(route.getServerSideProps))
+        .map((route) => route.path);
+      const ssrRoutesScript = `<script>window.__MATCHA_SSR_ROUTES__=${JSON.stringify(ssrRoutes)}</script>`;
       const html = template
         .replace('<!--ssr-outlet-->', appHtml)
-        .replace('</head>', `${propsScript}</head>`);
+        .replace('</head>', `${propsScript}${ssrRoutesScript}</head>`);
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
     } catch (e) {
