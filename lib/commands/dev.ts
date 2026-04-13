@@ -14,8 +14,6 @@ export async function run() {
     appType: 'custom',
   });
 
-  app.use(vite.middlewares);
-
   app.get('/__matcha_props', async (req, res) => {
     const rawPath = req.query.path;
     const routePath = typeof rawPath === 'string' ? rawPath : '/';
@@ -26,11 +24,10 @@ export async function run() {
     }
 
     try {
-      const parsedPath = new URL(routePath, 'http://localhost').pathname;
       const { loadStaticProps, loadServerSideProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
       const props = {
-        ...(await loadStaticProps(parsedPath)),
-        ...(await loadServerSideProps(parsedPath)),
+        ...(await loadStaticProps(routePath)),
+        ...(await loadServerSideProps(routePath)),
       };
 
       res
@@ -47,12 +44,12 @@ export async function run() {
     }
   });
 
+  app.use(vite.middlewares);
+
   app.use('*all', async (req, res) => {
     const url = req.originalUrl;
 
     try {
-      const requestUrl = new URL(url, 'http://localhost');
-
       // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
 
@@ -63,10 +60,10 @@ export async function run() {
       const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
 
       // 4. Render the app
-      const { html: appHtml, props } = await render(requestUrl.pathname);
+      const { html: appHtml, props } = await render(url);
 
       // 5. Inject rendered HTML
-      const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props)}</script>`;
+      const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
       const ssrRoutes = (routes as Array<{ path: string; getServerSideProps?: unknown }>)
         .filter((route) => Boolean(route.getServerSideProps))
         .map((route) => route.path);

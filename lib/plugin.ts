@@ -13,9 +13,41 @@ interface RenderResult {
   props: Record<string, unknown>;
 }
 
+/**
+ * Strip server-only code from client builds:
+ * - getStaticProps/getServerSideProps exports
+ * - Node.js built-in imports
+ */
+function stripServerCode(code: string): string {
+  code = code.replace(
+    /^export\s+const\s+getStaticProps\s*=[\s\S]*?^\};?\n/gm,
+    ''
+  );
+  code = code.replace(
+    /^export\s+(async\s+)?function\s+getStaticProps[\s\S]*?^\}\n/gm,
+    ''
+  );
+  code = code.replace(
+    /^export\s+const\s+getServerSideProps\s*=[\s\S]*?^\};?\n/gm,
+    ''
+  );
+  code = code.replace(
+    /^export\s+(async\s+)?function\s+getServerSideProps[\s\S]*?^\}\n/gm,
+    ''
+  );
+
+  code = code.replace(/,?\s*getStaticProps:\s*[^,}]+/g, '');
+  code = code.replace(/,?\s*getServerSideProps:\s*[^,}]+/g, ', hasServerSideProps: true');
+  code = code.replace(/^import\s+.*\s+from\s+['"]node:.*['"];?\n/gm, '');
+
+  return code;
+}
+
 export default function matcha(): Plugin {
   let root: string;
   let outDir: string;
+  let isSsr: boolean;
+  let command: 'build' | 'serve';
 
   return {
     name: 'matcha',
@@ -23,6 +55,20 @@ export default function matcha(): Plugin {
     configResolved(config) {
       root = config.root;
       outDir = config.build.outDir;
+      isSsr = Boolean(config.build.ssr);
+      command = config.command;
+    },
+
+    transform(code, id) {
+      if (command !== 'build') return;
+      if (isSsr) return;
+      if (!id.includes('/src/')) return;
+      if (!id.match(/\.(tsx?|jsx?)$/)) return;
+
+      const stripped = stripServerCode(code);
+      if (stripped !== code) {
+        return { code: stripped, map: null };
+      }
     },
 
     async closeBundle() {
@@ -78,8 +124,17 @@ function normalizePath(routePath) {
   return routePath === '/' ? routePath : routePath.replace(/\\/$/, '');
 }
 
-function isSsrRoute(routePath) {
-  return ssrRoutes.includes(normalizePath(routePath));
+function toRouteTarget(routeTarget) {
+  const parsed = new URL(routeTarget, 'http://localhost');
+  const pathname = normalizePath(parsed.pathname);
+  return {
+    pathname,
+    target: \`\${pathname}\${parsed.search}\`,
+  };
+}
+
+function isSsrRoute(routeTarget) {
+  return ssrRoutes.includes(toRouteTarget(routeTarget).pathname);
 }
 
 function staticPropsFilePath(routePath) {
@@ -96,16 +151,16 @@ async function loadCachedStaticProps(routePath) {
   }
 }
 
-export async function renderSsrPage(routePath) {
-  const normalizedPath = normalizePath(routePath);
+export async function renderSsrPage(routeTarget) {
+  const { pathname, target } = toRouteTarget(routeTarget);
   const [template, staticProps] = await Promise.all([
     readFile(templatePath, 'utf-8'),
-    loadCachedStaticProps(normalizedPath),
+    loadCachedStaticProps(pathname),
   ]);
-  const serverProps = await loadServerSideProps(normalizedPath);
+  const serverProps = await loadServerSideProps(target);
   const props = { ...staticProps, ...serverProps };
-  const { html: appHtml } = renderWithProps(normalizedPath, props);
-  const propsScript = \`<script>window.__INITIAL_PROPS__=\${JSON.stringify(props)}</script>\`;
+  const { html: appHtml } = renderWithProps(target, props);
+  const propsScript = \`<script>window.__INITIAL_PROPS__=\${JSON.stringify(props).replace(/</g, '\\\\u003c')}</script>\`;
   const routesScript = ${JSON.stringify(ssrRoutesScript)};
 
   return template
@@ -113,10 +168,10 @@ export async function renderSsrPage(routePath) {
     .replace('</head>', \`\${propsScript}\${routesScript}</head>\`);
 }
 
-export async function renderRouteProps(routePath) {
-  const normalizedPath = normalizePath(routePath);
-  const staticProps = await loadCachedStaticProps(normalizedPath);
-  const serverProps = await loadServerSideProps(normalizedPath);
+export async function renderRouteProps(routeTarget) {
+  const { pathname, target } = toRouteTarget(routeTarget);
+  const staticProps = await loadCachedStaticProps(pathname);
+  const serverProps = await loadServerSideProps(target);
   return { ...staticProps, ...serverProps };
 }
 
@@ -135,12 +190,12 @@ export { isSsrRoute, ssrRoutes };`;
         await writeFile(propsPath, JSON.stringify(staticProps));
 
         if (ssrRoutes.includes(route.path)) {
-          console.log(`[matcha] ${route.path} → SSR runtime`);
+          console.log(`[matcha] ${route.path} -> SSR runtime`);
           continue;
         }
 
         const { html: appHtml, props } = await render(route.path);
-        const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props)}</script>`;
+        const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
         const finalHtml = template
           .replace('<!--ssr-outlet-->', appHtml)
           .replace('</head>', `${propsScript}${ssrRoutesScript}</head>`);
@@ -149,7 +204,7 @@ export { isSsrRoute, ssrRoutes };`;
         await writeFile(htmlPath, finalHtml);
 
         renderedCount += 1;
-        console.log(`[matcha] ${route.path} → ${htmlPath.replace(root + '/', '')}`);
+        console.log(`[matcha] ${route.path} -> ${htmlPath.replace(root + '/', '')}`);
       }
 
       console.log(`[matcha] Static pages: ${renderedCount}, SSR pages: ${ssrRoutes.length}`);

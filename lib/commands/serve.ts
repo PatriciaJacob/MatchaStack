@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import express from 'express';
 import { pathToFileURL } from 'node:url';
 
@@ -22,9 +23,6 @@ export async function run() {
     ssrFunction = await import(pathToFileURL(ssrFunctionPath).href) as SsrFunctionModule;
   }
 
-  // Serve static files
-  app.use(express.static(distPath));
-
   app.get('/__matcha_props', async (req, res) => {
     if (!ssrFunction) {
       res.status(404).json({ error: 'SSR runtime not available' });
@@ -38,14 +36,13 @@ export async function run() {
       return;
     }
 
-    const pathname = new URL(routePath, 'http://localhost').pathname;
-    if (!ssrFunction.isSsrRoute(pathname)) {
+    if (!ssrFunction.isSsrRoute(routePath)) {
       res.status(404).json({ error: 'Route is not SSR' });
       return;
     }
 
     try {
-      const props = await ssrFunction.renderRouteProps(pathname);
+      const props = await ssrFunction.renderRouteProps(routePath);
       res
         .status(200)
         .set({
@@ -59,19 +56,22 @@ export async function run() {
     }
   });
 
-  // Handle clean URLs: /about → /about/index.html
-  app.use('*all', async (req, res) => {
-    const urlPath = req.originalUrl.split('?')[0] ?? '';
+  app.use(express.static(distPath, { index: false, redirect: false }));
 
-    // Try /path/index.html for clean URLs
+  // Handle clean URLs: /about -> /about/index.html
+  app.use('*all', async (req, res) => {
+    const requestUrl = req.originalUrl;
+    const urlPath = requestUrl.split('?')[0] ?? '';
+
     const indexPath = path.resolve(distPath, urlPath.slice(1), 'index.html');
     if (fs.existsSync(indexPath)) {
-      return res.sendFile(indexPath);
+      const html = await readFile(indexPath, 'utf-8');
+      return res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
     }
 
-    if (ssrFunction && ssrFunction.isSsrRoute(urlPath)) {
+    if (ssrFunction && ssrFunction.isSsrRoute(requestUrl)) {
       try {
-        const html = await ssrFunction.renderSsrPage(urlPath);
+        const html = await ssrFunction.renderSsrPage(requestUrl);
         return res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
       } catch (e) {
         console.error(e);
@@ -79,8 +79,8 @@ export async function run() {
       }
     }
 
-    // Fallback to root index.html (SPA fallback)
-    res.sendFile(path.resolve(distPath, 'index.html'));
+    const html = await readFile(path.resolve(distPath, 'index.html'), 'utf-8');
+    res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
   });
 
   app.listen(3000, () => {

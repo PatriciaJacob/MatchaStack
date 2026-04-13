@@ -22,6 +22,8 @@ export default function About(props: AboutProps) {
       </div>
       <nav>
         <Link to="/">Go Home</Link>
+        {' | '}
+        <Link to="/user-profile">Visit User Sample</Link>
       </nav>
     </div>
   );

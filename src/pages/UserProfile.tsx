@@ -36,7 +36,6 @@ export async function getServerSideProps() {
 }
 
 export default function UserProfile({ user, generatedAt, builtAt }: UserProfileProps) {
-  console.log('UserProfile', {user, generatedAt, builtAt});
   return (
     <div>
       <h1>User Profile (Sample)</h1>

@@ -3,12 +3,22 @@ import * as React from 'react';
 // --- Types ---
 
 export type RouteProps = Record<string, unknown>;
+export type RoutePropsResult = RouteProps | { props: RouteProps };
+export type QueryValue = string | string[];
+export type QueryParams = Record<string, QueryValue>;
+
+export interface ServerSidePropsContext {
+  url: string;
+  path: string;
+  query: QueryParams;
+}
 
 export interface Route {
   path: string;
   component: React.ComponentType<RouteProps>;
-  getStaticProps?: () => RouteProps | Promise<RouteProps>;
-  getServerSideProps?: () => RouteProps | Promise<RouteProps>;
+  getStaticProps?: () => RoutePropsResult | Promise<RoutePropsResult>;
+  getServerSideProps?: (context: ServerSidePropsContext) => RoutePropsResult | Promise<RoutePropsResult>;
+  hasServerSideProps?: boolean;
 }
 
 export interface RouterContextValue {
@@ -40,18 +50,32 @@ function getSsrRoutes(): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-async function fetchRouteProps(path: string): Promise<RouteProps> {
-  const shouldUseRuntimeProps = import.meta.env.DEV || getSsrRoutes().includes(path);
+function parseTarget(target: string): { path: string; url: string } {
+  const parsed = new URL(target, window.location.origin);
+  const path = normalizePath(parsed.pathname);
+
+  return {
+    path,
+    url: `${path}${parsed.search}`,
+  };
+}
+
+async function fetchRouteProps(route: Route | undefined, target: string): Promise<RouteProps> {
+  const { path, url } = parseTarget(target);
+  const shouldUseRuntimeProps =
+    import.meta.env.DEV ||
+    getSsrRoutes().includes(path) ||
+    Boolean(route?.hasServerSideProps || route?.getServerSideProps);
 
   if (shouldUseRuntimeProps) {
     try {
-      const devPropsUrl = `/__matcha_props?path=${encodeURIComponent(path)}`;
-      const res = await fetch(devPropsUrl, { cache: 'no-store' });
+      const runtimePropsUrl = `/__matcha_props?path=${encodeURIComponent(url)}`;
+      const res = await fetch(runtimePropsUrl, { cache: 'no-store' });
       if (res.ok) {
         return await res.json() as RouteProps;
       }
     } catch {
-      // Dev props endpoint failed, fall through to static props.
+      // Runtime props endpoint failed, fall through to static props.
     }
   }
 
@@ -73,36 +97,38 @@ export function Router({ routes, initialPath, initialProps }: RouterProps) {
   const [isLoading, setIsLoading] = React.useState(false);
 
   const navigate = React.useCallback(async (to: string) => {
-    const normalized = normalizePath(to);
+    const { path: nextPath, url } = parseTarget(to);
+    const route = matchRoute(routes, nextPath);
 
     setIsLoading(true);
-    const newProps = await fetchRouteProps(normalized);
+    const newProps = await fetchRouteProps(route, url);
 
     window.history.pushState({ props: newProps }, '', to);
-    setPath(normalized);
+    setPath(nextPath);
     setProps(newProps);
     setIsLoading(false);
-  }, []);
+  }, [routes]);
 
   // Handle browser back/forward
   React.useEffect(() => {
     const onPopState = async (e: PopStateEvent) => {
-      const newPath = normalizePath(window.location.pathname);
-      setPath(newPath);
+      const { path: nextPath, url } = parseTarget(window.location.href);
+      const route = matchRoute(routes, nextPath);
+      setPath(nextPath);
 
       // Use cached props from history state, or fetch
       if (e.state?.props) {
         setProps(e.state.props as RouteProps);
       } else {
         setIsLoading(true);
-        const newProps = await fetchRouteProps(newPath);
+        const newProps = await fetchRouteProps(route, url);
         setProps(newProps);
         setIsLoading(false);
       }
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [routes]);
 
   const route = matchRoute(routes, path);
   if (!route) {
