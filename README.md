@@ -9,7 +9,7 @@ A learning project: building a React metaframework from scratch.
 | 1 | SSG | Done |
 | 2 | Hydration | Done |
 | 3 | getStaticProps | Done |
-| 4 | SSR + Loaders | - |
+| 4 | SSR + Loaders | Done |
 | 5 | RSC | - |
 | 6 | Server Functions | - |
 
