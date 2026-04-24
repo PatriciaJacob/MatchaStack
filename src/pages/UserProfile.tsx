@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Link, type RouteProps } from '../router.js';
 
 interface User {
@@ -35,6 +36,44 @@ export async function getServerSideProps() {
   };
 }
 
+const timestampFormatter = new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'short',
+  timeStyle: 'medium',
+  timeZone: 'UTC',
+});
+
+function formatServerTimestamp(value: string) {
+  return `${timestampFormatter.format(new Date(value))} UTC`;
+}
+
+function formatClientTimestamp(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  }).format(new Date(value));
+}
+
+function LocalizedTimestamp({ value }: { value: string }) {
+  const [displayValue, setDisplayValue] = React.useState(() => formatServerTimestamp(value));
+  const [isLocalized, setIsLocalized] = React.useState(false);
+
+  React.useEffect(() => {
+    setDisplayValue(formatClientTimestamp(value));
+    setIsLocalized(true);
+  }, [value]);
+
+  return (
+    <time
+      dateTime={value}
+      style={{
+        visibility: isLocalized ? 'visible' : 'hidden',
+      }}
+    >
+      {displayValue}
+    </time>
+  );
+}
+
 export default function UserProfile({ user, generatedAt, builtAt }: UserProfileProps) {
   return (
     <div>
@@ -51,12 +90,12 @@ export default function UserProfile({ user, generatedAt, builtAt }: UserProfileP
         <dt>Plan</dt>
         <dd>{user.plan}</dd>
         <dt>Last Login</dt>
-        <dd>{new Date(user.lastLoginAt).toLocaleString()}</dd>
+        <dd><LocalizedTimestamp value={user.lastLoginAt} /></dd>
       </dl>
 
-      <p>Generated at: {new Date(generatedAt).toLocaleString()}</p>
+      <p>Generated at: <LocalizedTimestamp value={generatedAt} /></p>
 
-      <p>Built at: {new Date(builtAt).toLocaleString()}</p>
+      <p>Built at: <LocalizedTimestamp value={builtAt} /></p>
 
       <nav>
         <Link to="/">Go Home</Link>

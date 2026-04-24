@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc && vite build",
     "build:cli": "tsc",
+    "localstack:deploy": "./scripts/localstack-deploy.sh",
     "matcha": "node dist/bin/matcha.js"
   },
   "dependencies": {
