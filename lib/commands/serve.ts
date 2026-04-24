@@ -1,89 +1,105 @@
-import path from 'node:path';
+import { createServer, type ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import express from 'express';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-interface SsrFunctionModule {
-  isSsrRoute: (path: string) => boolean;
-  renderSsrPage: (path: string) => Promise<string>;
-  renderRouteProps: (path: string) => Promise<Record<string, unknown>>;
+interface SsrRuntimeModule {
+  handleRequest: (requestUrl: string | URL) => Promise<{
+    statusCode: number;
+    headers?: Record<string, string>;
+    body?: string;
+  }>;
+  isSsrRoute: (routeTarget: string) => boolean;
+  propsEndpoint: string;
 }
 
 export const description = 'Serve the production build with static + SSR routes';
 
 export async function run() {
-  const app = express();
   const root = process.cwd();
   const distPath = path.resolve(root, 'dist/public');
-  const ssrFunctionPath = path.resolve(root, 'dist/server/ssr-function.js');
+  const ssrRuntimePath = path.resolve(root, 'dist/server/ssr-runtime.js');
 
-  let ssrFunction: SsrFunctionModule | null = null;
-  if (fs.existsSync(ssrFunctionPath)) {
-    ssrFunction = await import(pathToFileURL(ssrFunctionPath).href) as SsrFunctionModule;
+  let ssrRuntime: SsrRuntimeModule | null = null;
+  if (fs.existsSync(ssrRuntimePath)) {
+    ssrRuntime = await import(pathToFileURL(ssrRuntimePath).href) as SsrRuntimeModule;
   }
 
-  app.get('/__matcha_props', async (req, res) => {
-    if (!ssrFunction) {
-      res.status(404).json({ error: 'SSR runtime not available' });
-      return;
+  const server = createServer(async (req, res) => {
+    const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost:3000'}`);
+    const routeTarget = `${requestUrl.pathname}${requestUrl.search}`;
+
+    const staticFilePath = await resolveStaticFile(distPath, requestUrl.pathname);
+    if (staticFilePath) {
+      return sendFile(res, staticFilePath);
     }
 
-    const rawPath = req.query.path;
-    const routePath = typeof rawPath === 'string' ? rawPath : '/';
-    if (!routePath.startsWith('/')) {
-      res.status(400).json({ error: 'Invalid path' });
-      return;
-    }
-
-    if (!ssrFunction.isSsrRoute(routePath)) {
-      res.status(404).json({ error: 'Route is not SSR' });
-      return;
-    }
-
-    try {
-      const props = await ssrFunction.renderRouteProps(routePath);
-      res
-        .status(200)
-        .set({
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-        })
-        .end(JSON.stringify(props));
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: (e as Error).message });
-    }
-  });
-
-  app.use(express.static(distPath, { index: false, redirect: false }));
-
-  // Handle clean URLs: /about -> /about/index.html
-  app.use('*all', async (req, res) => {
-    const requestUrl = req.originalUrl;
-    const urlPath = requestUrl.split('?')[0] ?? '';
-
-    const indexPath = path.resolve(distPath, urlPath.slice(1), 'index.html');
-    if (fs.existsSync(indexPath)) {
-      const html = await readFile(indexPath, 'utf-8');
-      return res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
-    }
-
-    if (ssrFunction && ssrFunction.isSsrRoute(requestUrl)) {
+    if (
+      ssrRuntime &&
+      (requestUrl.pathname === ssrRuntime.propsEndpoint || ssrRuntime.isSsrRoute(routeTarget))
+    ) {
       try {
-        const html = await ssrFunction.renderSsrPage(requestUrl);
-        return res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
-      } catch (e) {
-        console.error(e);
-        return res.status(500).end((e as Error).message);
+        const response = await ssrRuntime.handleRequest(requestUrl);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.body ?? '');
+        return;
+      } catch (error) {
+        console.error(error);
+        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end((error as Error).message);
+        return;
       }
     }
 
-    const html = await readFile(path.resolve(distPath, 'index.html'), 'utf-8');
-    res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+    const fallbackPath = path.resolve(distPath, 'index.html');
+    return sendFile(res, fallbackPath);
   });
 
-  app.listen(3000, () => {
+  server.listen(3000, () => {
     console.log('Serving dist/public/ at http://localhost:3000');
   });
+}
+
+async function resolveStaticFile(distPath: string, pathname: string) {
+  const cleanPath = decodeURIComponent(pathname);
+  const candidatePaths = new Set<string>();
+
+  if (cleanPath === '/') {
+    candidatePaths.add(path.resolve(distPath, 'index.html'));
+  } else {
+    const relativePath = cleanPath.replace(/^\/+/, '');
+    candidatePaths.add(path.resolve(distPath, relativePath));
+    candidatePaths.add(path.resolve(distPath, relativePath, 'index.html'));
+  }
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      const stat = await fs.promises.stat(candidatePath);
+      if (stat.isFile()) {
+        return candidatePath;
+      }
+    } catch {
+      // Ignore missing paths and continue trying candidates.
+    }
+  }
+
+  return null;
+}
+
+async function sendFile(res: ServerResponse, filePath: string) {
+  const body = await readFile(filePath);
+  res.writeHead(200, { 'content-type': contentTypeForFile(filePath) });
+  res.end(body);
+}
+
+function contentTypeForFile(filePath: string) {
+  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (filePath.endsWith('.js')) return 'text/javascript; charset=utf-8';
+  if (filePath.endsWith('.json')) return 'application/json; charset=utf-8';
+  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (filePath.endsWith('.svg')) return 'image/svg+xml';
+  if (filePath.endsWith('.png')) return 'image/png';
+  if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) return 'image/jpeg';
+  return 'application/octet-stream';
 }
