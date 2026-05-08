@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
+import { buildDevClientManifest, collectClientModules } from '../rsc/client-manifest.js';
 
 export const description = 'Start development server with HMR and SSR';
 
@@ -12,6 +13,21 @@ export async function run() {
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: 'custom',
+  });
+  const rscVite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'custom',
+    resolve: {
+      alias: [
+        { find: /^react$/, replacement: path.resolve(root, 'node_modules/react/react.react-server.js') },
+        { find: /^react\/jsx-runtime$/, replacement: path.resolve(root, 'node_modules/react/jsx-runtime.react-server.js') },
+        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(root, 'node_modules/react/jsx-dev-runtime.react-server.js') },
+      ],
+      conditions: ['react-server', 'node', 'import', 'module', 'default'],
+    },
+    ssr: {
+      noExternal: ['react', 'react-dom', 'react-server-dom-webpack'],
+    },
   });
 
   app.get('/__matcha_props', async (req, res) => {
@@ -50,19 +66,40 @@ export async function run() {
     const url = req.originalUrl;
 
     try {
-      // 1. Read index.html
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
-
-      // 2. Apply Vite HTML transforms (injects HMR client, etc.)
       template = await vite.transformIndexHtml(url, template);
 
-      // 3. Load server entry via Vite (enables HMR for SSR)
-      const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
+      if ((req.path === '/' || req.path === '') && req.method === 'GET') {
+        const [rscEntry, rscDocumentEntry, clientModules] = await Promise.all([
+          rscVite.ssrLoadModule('/src/entry-rsc-server.tsx'),
+          vite.ssrLoadModule('/src/entry-rsc-document.tsx'),
+          collectClientModules(root),
+        ]);
+        const manifest = buildDevClientManifest(root, clientModules);
+        const payload = await (rscEntry as {
+          renderHomePayload: (
+            manifest: ReturnType<typeof buildDevClientManifest>,
+          ) => Promise<string>;
+        }).renderHomePayload(manifest);
+        const html = await (rscDocumentEntry as {
+          renderHomeDocument: (
+            template: string,
+            manifest: ReturnType<typeof buildDevClientManifest>,
+            payload: string,
+          ) => Promise<string>;
+        }).renderHomeDocument(
+          template,
+          manifest,
+          payload,
+        );
 
-      // 4. Render the app
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+        return;
+      }
+
+      const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
       const { html: appHtml, props } = await render(url);
 
-      // 5. Inject rendered HTML
       const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
       const ssrRoutes = (routes as Array<{ path: string; getServerSideProps?: unknown }>)
         .filter((route) => Boolean(route.getServerSideProps))

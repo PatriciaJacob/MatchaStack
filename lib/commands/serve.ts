@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 
 interface SsrFunctionModule {
   isSsrRoute: (path: string) => boolean;
+  isRscRoute: (path: string) => boolean;
+  renderRscPage: (path: string) => Promise<string>;
   renderSsrPage: (path: string) => Promise<string>;
   renderRouteProps: (path: string) => Promise<Record<string, unknown>>;
 }
@@ -62,6 +64,16 @@ export async function run() {
   app.use('*all', async (req, res) => {
     const requestUrl = req.originalUrl;
     const urlPath = requestUrl.split('?')[0] ?? '';
+
+    if (ssrFunction && ssrFunction.isRscRoute(requestUrl)) {
+      try {
+        const html = await ssrFunction.renderRscPage(requestUrl);
+        return res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+      } catch (e) {
+        console.error(e);
+        return res.status(500).end((e as Error).message);
+      }
+    }
 
     const indexPath = path.resolve(distPath, urlPath.slice(1), 'index.html');
     if (fs.existsSync(indexPath)) {
