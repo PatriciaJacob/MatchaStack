@@ -10,7 +10,7 @@ export function renderHomeRoute() {
 
 async function renderFlightPayloadToString(
   model: React.ReactNode,
-  moduleMap: ClientManifest['moduleMap'],
+  moduleMap: ClientManifest['serverModuleMap'],
 ): Promise<string> {
   const stream = renderToPipeableStream(model, moduleMap);
 

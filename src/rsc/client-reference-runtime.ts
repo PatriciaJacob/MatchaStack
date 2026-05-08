@@ -28,33 +28,33 @@ interface WebpackRuntimeTarget {
   };
 }
 
-export function installWebpackClientReferenceRuntime(
+export function installFlightClientReferenceRuntime(
   target: WebpackRuntimeTarget,
-  loadChunk: (chunkId: string) => Promise<unknown>,
+  loadModule: (moduleId: string) => Promise<unknown>,
 ) {
   const loadedModules = new Map<string, unknown>();
   const loadingModules = new Map<string, Promise<unknown>>();
 
-  target.__webpack_chunk_load__ = async (chunkId: string) => {
-    if (loadedModules.has(chunkId)) {
-      return loadedModules.get(chunkId);
+  target.__webpack_chunk_load__ = async (moduleId: string) => {
+    if (loadedModules.has(moduleId)) {
+      return loadedModules.get(moduleId);
     }
 
-    const existing = loadingModules.get(chunkId);
+    const existing = loadingModules.get(moduleId);
     if (existing) {
       return existing;
     }
 
-    const loadPromise = loadChunk(chunkId).then((moduleNamespace) => {
-      loadedModules.set(chunkId, moduleNamespace);
-      loadingModules.delete(chunkId);
+    const loadPromise = loadModule(moduleId).then((moduleNamespace) => {
+      loadedModules.set(moduleId, moduleNamespace);
+      loadingModules.delete(moduleId);
       return moduleNamespace;
     }).catch((error: unknown) => {
-      loadingModules.delete(chunkId);
+      loadingModules.delete(moduleId);
       throw error;
     });
 
-    loadingModules.set(chunkId, loadPromise);
+    loadingModules.set(moduleId, loadPromise);
     return loadPromise;
   };
 

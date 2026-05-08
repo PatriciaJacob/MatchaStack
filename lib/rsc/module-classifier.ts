@@ -188,6 +188,32 @@ export function stripServerCode(code: string, fileName: string): string {
   return output;
 }
 
+export function stripModuleDirectives(
+  code: string,
+  fileName: string,
+  directives: readonly string[],
+): string {
+  const sourceFile = ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const removals: Array<{ start: number; end: number }> = [];
+  const directiveSet = new Set(directives);
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) {
+      break;
+    }
+
+    if (directiveSet.has(statement.expression.text)) {
+      removals.push({ start: statement.getStart(sourceFile), end: statement.end });
+    }
+  }
+
+  return removals
+    .reverse()
+    .reduce((nextCode, removal) => {
+      return `${nextCode.slice(0, removal.start)}${nextCode.slice(removal.end)}`;
+    }, code);
+}
+
 export function toModuleId(root: string, filePath: string): string {
   return path.relative(root, filePath).split(path.sep).join('/');
 }

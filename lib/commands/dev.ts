@@ -19,14 +19,12 @@ export async function run() {
     appType: 'custom',
     resolve: {
       alias: [
-        { find: /^react$/, replacement: path.resolve(root, 'node_modules/react/react.react-server.js') },
-        { find: /^react\/jsx-runtime$/, replacement: path.resolve(root, 'node_modules/react/jsx-runtime.react-server.js') },
-        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(root, 'node_modules/react/jsx-dev-runtime.react-server.js') },
+        { find: /^react$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/react.js') },
+        { find: /^react\/jsx-runtime$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/jsx-runtime.js') },
+        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/jsx-dev-runtime.js') },
+        { find: /^react-server-dom-webpack\/server\.node$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/rsc-server-node.js') },
       ],
       conditions: ['react-server', 'node', 'import', 'module', 'default'],
-    },
-    ssr: {
-      noExternal: ['react', 'react-dom', 'react-server-dom-webpack'],
     },
   });
 

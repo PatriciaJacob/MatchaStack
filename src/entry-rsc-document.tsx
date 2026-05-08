@@ -3,14 +3,7 @@ import { PassThrough, Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { renderToPipeableStream } from 'react-dom/server';
 import { createFromNodeStream } from 'react-server-dom-webpack/client.node';
-import { ClientManifest, installWebpackClientReferenceRuntime } from './rsc/client-reference-runtime.js';
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __webpack_chunk_load__: ((chunkId: string) => Promise<unknown>) | undefined;
-  // eslint-disable-next-line no-var
-  var __webpack_require__: (((moduleId: string) => unknown) & { m?: Record<string, unknown> }) | undefined;
-}
+import { ClientManifest, installFlightClientReferenceRuntime } from './rsc/client-reference-runtime.js';
 
 async function renderHtmlToString(node: React.ReactNode): Promise<string> {
   const stream = renderToPipeableStream(node);
@@ -35,14 +28,17 @@ function createRscBootstrapScript(manifest: ClientManifest, payload: string): st
 }
 
 async function renderHomeHtml(payload: string, manifest: ClientManifest): Promise<string> {
-  installWebpackClientReferenceRuntime(globalThis, async (chunkId) => {
-    const chunkPath = manifest.ssrChunkMap?.[chunkId];
+  installFlightClientReferenceRuntime(globalThis, async (moduleId) => {
+    const chunkPath = manifest.ssrChunkMap?.[moduleId];
     if (!chunkPath) {
-      throw new Error(`Unknown SSR client chunk "${chunkId}"`);
+      throw new Error(`Unknown SSR client module "${moduleId}"`);
     }
 
-    return await import(pathToFileURL(chunkPath).href);
+    return await import(/* @vite-ignore */ pathToFileURL(chunkPath).href);
   });
+  await Promise.all(
+    Object.keys(manifest.moduleMap).map((moduleId) => globalThis.__webpack_chunk_load__?.(moduleId)),
+  );
 
   const response = createFromNodeStream(Readable.from([payload]), {
     moduleMap: manifest.moduleMap,

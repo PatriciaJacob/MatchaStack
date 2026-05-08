@@ -1,44 +1,51 @@
 declare module 'react-server-dom-webpack/server.node' {
-  import type * as React from 'react';
+  import type { ReactNode } from 'react';
   import type { Writable } from 'node:stream';
-
-  export interface ClientReferenceRecord {
-    id: string;
-    chunks: string[];
-    name: string;
-    async?: boolean;
-  }
 
   export interface PipeableStream {
     pipe(destination: Writable): void;
   }
 
-  export function registerClientReference<T>(proxy: T, moduleId: string, exportName: string): T;
-
   export function renderToPipeableStream(
-    model: React.ReactNode,
-    moduleMap: Record<string, ClientReferenceRecord>,
+    model: ReactNode,
+    webpackMap: unknown,
+    options?: {
+      onError?: (error: unknown) => void;
+    },
   ): PipeableStream;
+
+  export function registerClientReference<T>(
+    proxyImplementation: T,
+    id: string,
+    exportName: string,
+  ): T;
 }
 
 declare module 'react-server-dom-webpack/client.edge' {
-  import type * as React from 'react';
-
-  export interface ClientReferenceRecord {
-    id: string;
-    chunks: string[];
-    name: string;
-    async?: boolean;
-  }
+  import type { ReactNode } from 'react';
 
   export function createFromReadableStream(
     stream: ReadableStream<Uint8Array>,
-    options: {
-      serverConsumerManifest: {
-        moduleMap: Record<string, Record<string, ClientReferenceRecord>>;
-        serverModuleMap?: Record<string, ClientReferenceRecord>;
-        moduleLoading?: unknown;
+    options?: {
+      serverConsumerManifest?: {
+        moduleMap: unknown;
+        serverModuleMap: unknown;
+        moduleLoading: unknown;
       };
     },
-  ): Promise<React.ReactNode>;
+  ): Promise<ReactNode>;
+}
+
+declare module 'react-server-dom-webpack/client.node' {
+  import type { ReactNode } from 'react';
+  import type { Readable } from 'node:stream';
+
+  export function createFromNodeStream(
+    stream: Readable,
+    options?: {
+      moduleMap: unknown;
+      serverModuleMap: unknown;
+      moduleLoading: unknown;
+    },
+  ): Promise<ReactNode>;
 }

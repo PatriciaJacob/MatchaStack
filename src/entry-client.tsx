@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom/client';
 import App from './app.js';
-import { ClientManifest, installWebpackClientReferenceRuntime } from './rsc/client-reference-runtime.js';
+import { ClientManifest, installFlightClientReferenceRuntime } from './rsc/client-reference-runtime.js';
 
 declare global {
   interface Window {
@@ -33,10 +33,10 @@ function createStreamFromBase64(base64: string): ReadableStream<Uint8Array> {
 }
 
 async function bootstrapRsc() {
-  installWebpackClientReferenceRuntime(window, async (chunkId) => {
-    const chunkUrl = window.__MATCHA_RSC_MANIFEST__.chunkMap[chunkId];
+  installFlightClientReferenceRuntime(window, async (moduleId) => {
+    const chunkUrl = window.__MATCHA_RSC_MANIFEST__.chunkMap[moduleId];
     if (!chunkUrl) {
-      throw new Error(`Unknown client chunk "${chunkId}"`);
+      throw new Error(`Unknown client module "${moduleId}"`);
     }
 
     return await import(/* @vite-ignore */ chunkUrl);
@@ -47,13 +47,15 @@ async function bootstrapRsc() {
     {
       serverConsumerManifest: {
         moduleMap: window.__MATCHA_RSC_MANIFEST__.moduleMap,
-        serverModuleMap: window.__MATCHA_RSC_MANIFEST__.serverModuleMap ?? {},
+        serverModuleMap: window.__MATCHA_RSC_MANIFEST__.serverModuleMap,
         moduleLoading: null,
       },
     },
   ) as Promise<React.ReactNode>;
   const resolvedNode = await response;
-  ReactDOM.createRoot(appRoot).render(
+
+  ReactDOM.hydrateRoot(
+    appRoot,
     <React.StrictMode>
       <div data-matcha-rsc-root>
         {resolvedNode}

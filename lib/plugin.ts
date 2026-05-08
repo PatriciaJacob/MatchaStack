@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { analyzeModule, stripServerCode, toModuleId } from './rsc/module-classifier.js';
+import { analyzeModule, stripModuleDirectives, stripServerCode, toModuleId } from './rsc/module-classifier.js';
 import { collectClientModules } from './rsc/client-manifest.js';
 
 interface Route {
@@ -88,6 +88,29 @@ function createRscBuildPlugin(root: string): Plugin {
 
       return {
         code: createClientReferenceModuleCode(toModuleId(root, cleanId), analysis.exports),
+        map: null,
+      };
+    },
+  };
+}
+
+function createClientSsrBuildPlugin(root: string): Plugin {
+  return {
+    name: 'matcha-rsc-client-ssr-build',
+
+    transform(code, id) {
+      const cleanId = id.split('?', 1)[0] ?? id;
+      if (!cleanId.includes('/src/') || !isSourceModule(cleanId)) {
+        return;
+      }
+
+      const analysis = analyzeModule(code, cleanId);
+      if (!analysis.useClient) {
+        return;
+      }
+
+      return {
+        code: stripModuleDirectives(code, cleanId, ['use client']),
         map: null,
       };
     },
@@ -252,6 +275,7 @@ export default function matcha(): Plugin {
         await build({
           configFile: false,
           root,
+          plugins: [createClientSsrBuildPlugin(root)],
           build: {
             ssr: true,
             outDir: serverOutDir,
