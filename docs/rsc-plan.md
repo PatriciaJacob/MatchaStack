@@ -359,11 +359,5 @@ If server actions are in scope for the release, also require:
 
 ## Immediate Next Step
 
-Start with Milestone 1:
-
-- refactor the server runtime contract away from `{ html, props }`
-- add directive-aware client/server module classification in the Vite plugin
-- generate the first client reference manifest
-- land one route on the full document RSC path
-
-That gives the project a real, working Flight slice immediately, while still building toward the full framework architecture.
+- visualize current milestone (fixed)
+- implement and and visualize/play with how RSC works on navigation/reloads, suspense behaviour, streaming etc
