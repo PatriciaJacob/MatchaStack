@@ -1,5 +1,3 @@
-import { Link, type RouteProps } from '../router.js';
-
 interface User {
   id: string;
   name: string;
@@ -8,34 +6,24 @@ interface User {
   lastLoginAt: string;
 }
 
-interface UserProfileProps extends RouteProps {
-  user: User;
-  generatedAt: string;
-  builtAt: string;
-}
-
-export async function getStaticProps() {
+function loadUser(): User {
   return {
-    builtAt: new Date().toISOString(),
-  };
-}
-
-export async function getServerSideProps() {
-  const user: User = {
     id: 'user_123',
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     plan: 'pro',
     lastLoginAt: '2026-02-08T16:30:00.000Z',
   };
-
-  return {
-    user,
-    generatedAt: new Date().toISOString(),
-  };
 }
 
-export default function UserProfile({ user, generatedAt, builtAt }: UserProfileProps) {
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
+export default function UserProfilePage() {
+  const user = loadUser();
+  const generatedAt = new Date().toISOString();
+
   return (
     <div>
       <h1>User Profile (Sample)</h1>
@@ -51,15 +39,13 @@ export default function UserProfile({ user, generatedAt, builtAt }: UserProfileP
         <dt>Plan</dt>
         <dd>{user.plan}</dd>
         <dt>Last Login</dt>
-        <dd>{new Date(user.lastLoginAt).toLocaleString()}</dd>
+        <dd>{formatDate(user.lastLoginAt)}</dd>
       </dl>
 
-      <p>Generated at: {new Date(generatedAt).toLocaleString()}</p>
-
-      <p>Built at: {new Date(builtAt).toLocaleString()}</p>
+      <p>Generated at: {formatDate(generatedAt)}</p>
 
       <nav>
-        <Link to="/">Go Home</Link>
+        <a href="/">Go Home</a>
       </nav>
     </div>
   );

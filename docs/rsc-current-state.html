@@ -15,7 +15,7 @@
         --accent-soft: #d9eadf;
         --server: #e8eee7;
         --client: #e9edf5;
-        --legacy: #f0e7df;
+        --future: #f0e7df;
         --code: #18211c;
       }
 
@@ -141,7 +141,7 @@
         background: #58739d;
       }
 
-      .dot.legacy {
+      .dot.future {
         background: #a87855;
       }
 
@@ -184,8 +184,8 @@
         background: var(--client);
       }
 
-      .stage.legacy {
-        background: var(--legacy);
+      .stage.future {
+        background: var(--future);
       }
 
       .stage small {
@@ -294,38 +294,38 @@
           <div class="legend" aria-label="Legend">
             <span class="tag"><span class="dot server"></span>Server graph</span>
             <span class="tag"><span class="dot client"></span>Browser graph</span>
-            <span class="tag"><span class="dot legacy"></span>Legacy props path</span>
+            <span class="tag"><span class="dot future"></span>Remaining work</span>
           </div>
         </div>
         <div class="summary">
           <div class="summary-row">
             <strong>Status</strong>
-            <p>Milestone 1 is complete for <code>/</code>: a full document request renders through Flight, a generated manifest resolves a client island, and the browser hydrates the island.</p>
+            <p>Milestone 2 is complete for the current routes: document requests render through Flight, generated manifests resolve client islands, and the browser hydrates from the embedded RSC payload.</p>
           </div>
           <div class="summary-row">
             <strong>Scope</strong>
-            <p><code>/</code> uses RSC. <code>/about</code> still uses static props. <code>/user-profile</code> still uses request-time SSR props.</p>
+            <p><code>/</code>, <code>/about</code>, and <code>/user-profile</code> are all real RSC routes. The old loader files and props transport are gone.</p>
           </div>
         </div>
       </header>
 
       <section class="section">
-        <h2>Full Document Request For <code>/</code></h2>
+        <h2>Full Document Request</h2>
         <div class="pipeline">
           <div class="stage client">
             <h3>1. Browser</h3>
             <small>HTTP request</small>
-            <p><code>GET /</code> asks for a document, not a props JSON file.</p>
+            <p><code>GET /about</code> asks for a document; any current route enters the same RSC path.</p>
           </div>
           <div class="stage server">
             <h3>2. Route Gate</h3>
             <small>Express handler</small>
-            <p><code>isRscRoute("/")</code> selects the RSC document pipeline.</p>
+            <p><code>matchRscRoute(url)</code> selects the route entry or returns the RSC 404.</p>
           </div>
           <div class="stage server">
             <h3>3. RSC Render</h3>
             <small>entry-rsc-server</small>
-            <p><code>renderToPipeableStream(&lt;HomePage /&gt;, serverModuleMap)</code> creates Flight rows.</p>
+            <p><code>renderRoutePayload(url, manifest)</code> renders the selected server component tree to Flight rows.</p>
           </div>
           <div class="stage server">
             <h3>4. HTML Shell</h3>
@@ -351,7 +351,7 @@
           <div class="tracks">
             <div class="track">
               <strong>Client bundle</strong>
-              <p>Contains browser code, including <code>HomeCounter.client.tsx</code> as a chunk.</p>
+              <p>Contains browser code, including <code>HomeCounter.client.tsx</code> as a chunk for the client island.</p>
             </div>
             <div class="track">
               <strong>RSC server bundle</strong>
@@ -368,7 +368,7 @@
           </div>
         </div>
         <div class="note">
-          <p>The dev server now uses one Vite server. RSC loads enter the same server through <code>?matcha-rsc</code>, which creates an RSC-scoped module graph inside the existing Vite process.</p>
+          <p>The dev server uses one Vite server. RSC loads enter the same server through <code>?matcha-rsc</code>, which creates an RSC-scoped module graph inside the existing Vite process.</p>
         </div>
       </section>
 
@@ -453,6 +453,36 @@ export default function HomeCounter() {
 
           <article class="data-block">
             <header>
+              <strong>RSC Route Table</strong>
+              <span><code>src/entry-rsc-server.tsx</code></span>
+            </header>
+            <pre><code>[
+  { path: "/", render: () =&gt; &lt;HomePage /&gt; },
+  { path: "/about", render: () =&gt; &lt;AboutPage /&gt; },
+  { path: "/user-profile", render: () =&gt; &lt;UserProfilePage /&gt; }
+]</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Server Component Data</strong>
+              <span>Data is read before Flight serialization</span>
+            </header>
+            <pre><code>// /about
+const blog = readFileSync("static/blog.md", "utf8");
+return &lt;pre&gt;{blog}&lt;/pre&gt;;
+
+// /user-profile
+const user = {
+  id: "user_123",
+  name: "Ada Lovelace",
+  email: "ada@example.com",
+  plan: "pro"
+};</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
               <strong>Flight Payload Rows</strong>
               <span>Text stream before base64 embedding</span>
             </header>
@@ -530,34 +560,34 @@ __webpack_require__(moduleId)
       </section>
 
       <section class="section">
-        <h2>Current Route Split</h2>
+        <h2>Current Route Model</h2>
         <div class="pipeline">
           <div class="stage server">
             <h3>/</h3>
             <small>RSC document</small>
-            <p>Flight payload plus HTML shell. No <code>__INITIAL_PROPS__</code>.</p>
+            <p>Server component route with a hydrated <code>'use client'</code> counter island.</p>
           </div>
-          <div class="stage legacy">
+          <div class="stage server">
             <h3>/about</h3>
-            <small>Static props</small>
-            <p>Build-time props are written to <code>_props.json</code> and embedded in static HTML.</p>
+            <small>RSC document</small>
+            <p>Server component reads <code>static/blog.md</code> directly during the RSC render.</p>
           </div>
-          <div class="stage legacy">
+          <div class="stage server">
             <h3>/user-profile</h3>
-            <small>SSR props</small>
-            <p>Request-time props still flow through <code>/__matcha_props</code> for client navigation.</p>
+            <small>RSC document</small>
+            <p>Server component creates request-time profile data inside the route tree.</p>
           </div>
-          <div class="stage client">
+          <div class="stage server">
+            <h3>404</h3>
+            <small>RSC document</small>
+            <p>Unknown paths still return an HTML shell and Flight payload, with a 404 status.</p>
+          </div>
+          <div class="stage future">
             <h3>Next milestone</h3>
-            <small>All document routes</small>
-            <p>Generalize the RSC document pipeline beyond <code>/</code>.</p>
-          </div>
-          <div class="stage client">
-            <h3>Later</h3>
             <small>Flight navigation</small>
-            <p>Replace props JSON navigation with route Flight subrequests.</p>
+            <p>Client-side route changes should request Flight and apply the returned tree.</p>
           </div>
-          <div class="stage client">
+          <div class="stage future">
             <h3>Later</h3>
             <small>Server actions</small>
             <p>Add <code>'use server'</code> references and action response payloads.</p>

@@ -1,11 +1,11 @@
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { buildDevClientManifest, collectClientModules } from '../rsc/client-manifest.js';
 import { createRscDevPlugin } from '../plugin.js';
 
-export const description = 'Start development server with HMR and SSR';
+export const description = 'Start development server with HMR and RSC rendering';
 
 export async function run() {
   const app = express();
@@ -17,36 +17,6 @@ export async function run() {
     plugins: [createRscDevPlugin(root)],
   });
 
-  app.get('/__matcha_props', async (req, res) => {
-    const rawPath = req.query.path;
-    const routePath = typeof rawPath === 'string' ? rawPath : '/';
-
-    if (!routePath.startsWith('/')) {
-      res.status(400).json({ error: 'Invalid path' });
-      return;
-    }
-
-    try {
-      const { loadStaticProps, loadServerSideProps } = await vite.ssrLoadModule('/src/entry-server.tsx');
-      const props = {
-        ...(await loadStaticProps(routePath)),
-        ...(await loadServerSideProps(routePath)),
-      };
-
-      res
-        .status(200)
-        .set({
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-        })
-        .end(JSON.stringify(props));
-    } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
-      console.error(e);
-      res.status(500).json({ error: (e as Error).message });
-    }
-  });
-
   app.use(vite.middlewares);
 
   app.use('*all', async (req, res) => {
@@ -56,47 +26,30 @@ export async function run() {
       let template = fs.readFileSync(path.resolve(root, 'index.html'), 'utf-8');
       template = await vite.transformIndexHtml(url, template);
 
-      if ((req.path === '/' || req.path === '') && req.method === 'GET') {
-        const [rscEntry, rscDocumentEntry, clientModules] = await Promise.all([
-          vite.ssrLoadModule('/src/entry-rsc-server.tsx?matcha-rsc'),
-          vite.ssrLoadModule('/src/entry-rsc-document.tsx'),
-          collectClientModules(root),
-        ]);
-        const manifest = buildDevClientManifest(root, clientModules);
-        const payload = await (rscEntry as {
-          renderHomePayload: (
-            manifest: ReturnType<typeof buildDevClientManifest>,
-          ) => Promise<string>;
-        }).renderHomePayload(manifest);
-        const html = await (rscDocumentEntry as {
-          renderHomeDocument: (
-            template: string,
-            manifest: ReturnType<typeof buildDevClientManifest>,
-            payload: string,
-          ) => Promise<string>;
-        }).renderHomeDocument(
-          template,
-          manifest,
-          payload,
-        );
+      const [rscEntry, rscDocumentEntry, clientModules] = await Promise.all([
+        vite.ssrLoadModule('/src/entry-rsc-server.tsx?matcha-rsc'),
+        vite.ssrLoadModule('/src/entry-rsc-document.tsx'),
+        collectClientModules(root),
+      ]);
+      const route = (rscEntry as {
+        matchRscRoute: (routeTarget: string) => unknown;
+      }).matchRscRoute(url);
+      const manifest = buildDevClientManifest(root, clientModules);
+      const payload = await (rscEntry as {
+        renderRoutePayload: (
+          routeTarget: string,
+          manifest: ReturnType<typeof buildDevClientManifest>,
+        ) => Promise<string>;
+      }).renderRoutePayload(url, manifest);
+      const html = await (rscDocumentEntry as {
+        renderRscDocument: (
+          template: string,
+          manifest: ReturnType<typeof buildDevClientManifest>,
+          payload: string,
+        ) => Promise<string>;
+      }).renderRscDocument(template, manifest, payload);
 
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
-        return;
-      }
-
-      const { render, routes } = await vite.ssrLoadModule('/src/entry-server.tsx');
-      const { html: appHtml, props } = await render(url);
-
-      const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
-      const ssrRoutes = (routes as Array<{ path: string; getServerSideProps?: unknown }>)
-        .filter((route) => Boolean(route.getServerSideProps))
-        .map((route) => route.path);
-      const ssrRoutesScript = `<script>window.__MATCHA_SSR_ROUTES__=${JSON.stringify(ssrRoutes)}</script>`;
-      const html = template
-        .replace('<!--ssr-outlet-->', appHtml)
-        .replace('</head>', `${propsScript}${ssrRoutesScript}</head>`);
-
-      res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+      res.status(route ? 200 : 404).set({ 'Content-Type': 'text/html' }).end(html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       console.error(e);

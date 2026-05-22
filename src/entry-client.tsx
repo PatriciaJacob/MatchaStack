@@ -1,19 +1,15 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom/client';
-import App from './app.js';
 import { ClientManifest, installFlightClientReferenceRuntime } from './rsc/client-reference-runtime.js';
 
 declare global {
   interface Window {
-    __INITIAL_PROPS__?: Record<string, unknown>;
-    __MATCHA_SSR_ROUTES__?: string[];
     __MATCHA_RSC_ENABLED__?: boolean;
     __MATCHA_RSC_MANIFEST__?: ClientManifest;
     __MATCHA_RSC_PAYLOAD__?: string;
   }
 }
 
-const initialProps = window.__INITIAL_PROPS__ ?? {};
 const appRoot = document.getElementById('app')!;
 
 function createStreamFromBase64(base64: string): ReadableStream<Uint8Array> {
@@ -64,11 +60,8 @@ async function bootstrapRsc() {
   );
 }
 
-if (window.__MATCHA_RSC_ENABLED__ && window.__MATCHA_RSC_MANIFEST__ && window.__MATCHA_RSC_PAYLOAD__) {
-  void bootstrapRsc();
-} else {
-  ReactDOM.hydrateRoot(
-    appRoot,
-    <App path={window.location.pathname} props={initialProps} />
-  );
+if (!window.__MATCHA_RSC_ENABLED__ || !window.__MATCHA_RSC_MANIFEST__ || !window.__MATCHA_RSC_PAYLOAD__) {
+  throw new Error('MatchaStack expected an RSC document bootstrap.');
 }
+
+void bootstrapRsc();

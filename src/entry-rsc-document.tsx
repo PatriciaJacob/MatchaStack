@@ -32,7 +32,7 @@ function createRscBootstrapScript(manifest: ClientManifest, payload: string): st
   return `<script>window.__MATCHA_RSC_ENABLED__=true;window.__MATCHA_RSC_MANIFEST__=${JSON.stringify(browserManifest).replace(/</g, '\\u003c')};window.__MATCHA_RSC_PAYLOAD__=${JSON.stringify(base64Payload)};</script>`;
 }
 
-async function renderHomeHtml(payload: string, manifest: ClientManifest): Promise<string> {
+async function renderRscHtml(payload: string, manifest: ClientManifest): Promise<string> {
   installFlightClientReferenceRuntime(globalThis, async (moduleId) => {
     const chunkPath = manifest.ssrChunkMap?.[moduleId];
     if (!chunkPath) {
@@ -59,12 +59,12 @@ async function renderHomeHtml(payload: string, manifest: ClientManifest): Promis
   );
 }
 
-export async function renderHomeDocument(
+export async function renderRscDocument(
   template: string,
   manifest: ClientManifest,
   payload: string,
 ): Promise<string> {
-  const html = await renderHomeHtml(payload, manifest);
+  const html = await renderRscHtml(payload, manifest);
   const bootstrapScript = createRscBootstrapScript(manifest, payload);
 
   return template

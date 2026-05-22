@@ -13,23 +13,19 @@ It is intentionally not a "temporary simplification" plan. The goal is to build 
 - Preserve the existing custom Vite + Express architecture where possible.
 - Evolve the current SSR pipeline into an RSC + HTML shell pipeline instead of layering a fake RSC model on top of `__INITIAL_PROPS__`.
 
-## Current Starting Point
+## Current Implementation
 
-The current architecture already gives us a few useful building blocks:
+The current architecture now has the RSC document pipeline in place for every route in the toy app:
 
-- [src/entry-server.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-server.tsx) renders the app on the server.
-- [src/entry-client.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-client.tsx) hydrates the client.
-- [src/router.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/router.tsx) handles client navigation and route data fetching.
-- [lib/plugin.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/plugin.ts) already owns a meaningful part of the build pipeline.
-- [lib/commands/dev.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/dev.ts) and [lib/commands/serve.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/serve.ts) already control request handling.
+- [src/entry-rsc-server.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-rsc-server.tsx) owns the RSC route table and renders route trees to Flight payloads.
+- [src/entry-rsc-document.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-rsc-document.tsx) renders the HTML shell from the same Flight payload used by the browser.
+- [src/entry-client.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-client.tsx) decodes the embedded Flight stream and hydrates the resulting React tree.
+- [lib/plugin.ts](/Users/kbiel/code/personal/MatchaStack/lib/plugin.ts) builds the client graph, RSC server graph, SSR-safe client chunks, and client reference manifests.
+- [lib/commands/dev.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/dev.ts) and [lib/commands/serve.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/serve.ts) route document requests through the same RSC model in development and production.
 
 What is missing is the core RSC contract:
 
-- no server/client file boundary model
-- no client reference manifest
-- no Flight response endpoint
-- no client-side Flight stream consumption
-- no separation between the SSR shell and the RSC tree
+- no Flight endpoint for client-side navigation yet
 - no server reference manifest or action transport for later phases
 
 ## Architectural Target
@@ -68,7 +64,7 @@ Do not introduce custom file suffixes as the primary boundary mechanism. Support
 
 ### 2. Split SSR shell rendering from RSC rendering
 
-Today `renderToString(<App ... />)` in [src/entry-server.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-server.tsx) performs the entire render.
+Originally, `renderToString(<App ... />)` in the deleted `src/entry-server.tsx` performed the entire render.
 
 With RSC, there are two related but distinct server tasks:
 
@@ -77,15 +73,15 @@ With RSC, there are two related but distinct server tasks:
 
 Those should become separate entry points with separate responsibilities.
 
-### 3. Route modules become server-first
+### 3. Route modules are server-first
 
-The current route model is props-centric:
+The old route model was props-centric:
 
 - route component
 - `getStaticProps`
 - `getServerSideProps`
 
-For real RSC, the primary abstraction should shift to route modules that can render server components directly and fetch data inline on the server side. Over time, route loaders should become optional compatibility APIs rather than the main model.
+For real RSC, the primary abstraction is now route modules that render server components directly and fetch data inline on the server side. The loader compatibility layer was intentionally removed instead of preserved.
 
 ### 4. Manifests are first-class build artifacts
 
@@ -104,7 +100,7 @@ The milestones below are intentionally vertical. Each one should leave the repo 
 
 ## Milestone 1: Single-Route RSC Document Render
 
-Status: Complete for `/`.
+Status: Complete.
 
 ### End state
 
@@ -112,18 +108,18 @@ One route can render through real Flight on a full document request, with a real
 
 ### What changes
 
-1. Split the current server runtime in [src/entry-server.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-server.tsx) into:
+1. Split the original server runtime into:
    - request context creation
    - RSC tree rendering
    - HTML shell rendering
-2. Extend [lib/plugin.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/plugin.ts) to:
+2. Extend [lib/plugin.ts](/Users/kbiel/code/personal/MatchaStack/lib/plugin.ts) to:
    - detect `'use client'`
    - classify modules into server vs client graphs
    - emit a client reference manifest
 3. Replace the `window.__INITIAL_PROPS__` bootstrap for that route with:
    - an HTML shell
    - an initial Flight payload
-   - client-side Flight consumption in [src/entry-client.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-client.tsx)
+   - client-side Flight consumption in [src/entry-client.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-client.tsx)
 4. Keep the rest of the app on the old SSR path while the first route proves the architecture.
 
 ### Why this is vertical
@@ -139,17 +135,19 @@ It exercises the real RSC protocol on a real page load without forcing the whole
 
 ## Milestone 2: Full-Document RSC for All Routes
 
+Status: Complete for the current routes. The old loader path was removed rather than kept as a migration layer.
+
 ### End state
 
-All document requests render through the new RSC document pipeline, even if client-side navigation still uses the legacy path.
+All document requests render through the new RSC document pipeline.
 
 ### What changes
 
 1. Generalize the Milestone 1 runtime so every route can render as:
    - server-first route module
    - HTML shell plus Flight payload
-2. Update [src/routes.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/routes.ts) and related route modules so route defaults can be server components.
-3. Keep `getStaticProps` and `getServerSideProps` only as a migration layer where needed.
+2. Replace the old props route table with RSC route entries in [src/entry-rsc-server.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-rsc-server.tsx).
+3. Move `/about` and `/user-profile` data reads into server components.
 4. Expand module boundary checks so invalid server/client imports fail loudly across the app.
 
 ### Why this is vertical
@@ -161,6 +159,7 @@ After this step, a browser refresh on any route uses the real RSC render path, s
 - all full document requests use Flight-backed rendering
 - all routes can include `'use client'` islands
 - the old props bootstrap path is no longer needed for initial document loads
+- `_props.json`, `__matcha_props`, `__INITIAL_PROPS__`, and the old route loader files are gone from the runtime
 
 ## Milestone 3: RSC Client Navigation
 
@@ -170,15 +169,15 @@ Client-side navigation fetches Flight payloads instead of route props, so the ap
 
 ### What changes
 
-1. Replace the `_props.json` and `__matcha_props` navigation model in [src/router.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/router.tsx).
+1. Add an RSC navigation request path instead of the removed props navigation model.
 2. Add a Flight endpoint for subrequests in:
-   - [lib/commands/dev.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/dev.ts)
-   - [lib/commands/serve.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/serve.ts)
+   - [lib/commands/dev.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/dev.ts)
+   - [lib/commands/serve.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/serve.ts)
 3. Teach the client runtime to:
    - request the next route as Flight
    - apply the returned tree
    - preserve history and back/forward behavior
-4. Keep route compatibility shims only where still needed to bridge old route modules during migration.
+4. Keep route state in the Flight tree rather than rebuilding the old loader contract.
 
 ### Why this is vertical
 
@@ -188,19 +187,19 @@ This is the milestone where the app becomes workable as an RSC app in day-to-day
 
 - client navigation uses Flight payloads
 - back/forward works against the RSC router path
-- `_props.json` and `__matcha_props` are no longer part of the primary navigation flow
+- navigation requests fetch and apply Flight payloads
 
-## Milestone 4: Route Model Cleanup and Layouts
+## Milestone 4: Layouts and Route Model Hardening
 
 ### End state
 
-The route model is server-component-first rather than loader-first, and shared layouts can participate naturally in the RSC tree.
+The route model is hardened around server components, and shared layouts can participate naturally in the RSC tree.
 
 ### What changes
 
-1. Move route data access from `getStaticProps` / `getServerSideProps` into server components or adjacent server utilities where practical.
+1. Introduce a clearer route module authoring surface for server components.
 2. Introduce layout boundaries if the framework wants nested layouts.
-3. Remove remaining compatibility code that exists only for the old props-centric model.
+3. Add focused diagnostics and tests around invalid server/client imports.
 4. Simplify the public mental model around:
    - server components by default
    - client components via `'use client'`
@@ -213,7 +212,7 @@ This is a product-quality milestone rather than just an internal refactor: the p
 ### Exit criteria
 
 - new routes can be authored as server-first modules
-- loader APIs are optional or deprecated rather than foundational
+- no loader APIs are needed for the current route model
 - layouts compose through the RSC tree
 
 ## Milestone 5: Server References and Actions
@@ -224,11 +223,11 @@ This is a product-quality milestone rather than just an internal refactor: the p
 
 ### What changes
 
-1. Extend [lib/plugin.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/plugin.ts) to discover `'use server'` exports and emit a server reference manifest.
+1. Extend [lib/plugin.ts](/Users/kbiel/code/personal/MatchaStack/lib/plugin.ts) to discover `'use server'` exports and emit a server reference manifest.
 2. Add runtime lookup and invocation support for server references.
 3. Add action endpoints in:
-   - [lib/commands/dev.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/dev.ts)
-   - [lib/commands/serve.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/serve.ts)
+   - [lib/commands/dev.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/dev.ts)
+   - [lib/commands/serve.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/serve.ts)
 4. Return action results in the format React expects, including updated Flight payloads when needed.
 
 ### Why this is vertical
@@ -249,12 +248,12 @@ The RSC architecture is stable in dev and production, with tests covering the pr
 
 ### What changes
 
-1. Harden [lib/commands/dev.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/dev.ts) for:
+1. Harden [lib/commands/dev.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/dev.ts) for:
    - HMR across server and client graphs
    - manifest invalidation
    - useful boundary diagnostics
-2. Finalize [lib/commands/serve.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/serve.ts) around explicit manifest loading and RSC request handling.
-3. Remove remaining `_props.json`, `__matcha_props`, and `__INITIAL_PROPS__` infrastructure if any compatibility remnants still exist.
+2. Finalize [lib/commands/serve.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/serve.ts) around explicit manifest loading and RSC request handling.
+3. Keep the removed props infrastructure from reappearing by testing the document and navigation contracts.
 4. Add tests for:
    - module classification
    - client reference manifest generation
@@ -278,17 +277,15 @@ These are the main files and modules likely to change first.
 
 ### Runtime
 
-- [src/entry-server.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-server.tsx)
-- [src/entry-client.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/entry-client.tsx)
-- [src/router.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/router.tsx)
-- [src/app.tsx](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/app.tsx)
-- [src/routes.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/src/routes.ts)
+- [src/entry-rsc-server.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-rsc-server.tsx)
+- [src/entry-rsc-document.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-rsc-document.tsx)
+- [src/entry-client.tsx](/Users/kbiel/code/personal/MatchaStack/src/entry-client.tsx)
 
 ### Build / Framework internals
 
-- [lib/plugin.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/plugin.ts)
-- [lib/commands/dev.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/dev.ts)
-- [lib/commands/serve.ts](/Users/patriciajacob/.codex/worktrees/de21/MatchaStack/lib/commands/serve.ts)
+- [lib/plugin.ts](/Users/kbiel/code/personal/MatchaStack/lib/plugin.ts)
+- [lib/commands/dev.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/dev.ts)
+- [lib/commands/serve.ts](/Users/kbiel/code/personal/MatchaStack/lib/commands/serve.ts)
 
 ### New modules likely needed
 
@@ -361,5 +358,5 @@ If server actions are in scope for the release, also require:
 
 ## Immediate Next Step
 
-- visualize current milestone (fixed)
-- implement and and visualize/play with how RSC works on navigation/reloads, suspense behaviour, streaming etc
+- implement and visualize Flight-backed navigation
+- explore reloads, Suspense behavior, streaming, and server action transport

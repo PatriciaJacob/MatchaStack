@@ -1,20 +1,14 @@
 import { Plugin, build } from 'vite';
-import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import ts from 'typescript';
-import { analyzeModule, stripModuleDirectives, stripServerCode, toModuleId } from './rsc/module-classifier.js';
+import { analyzeModule, stripModuleDirectives, toModuleId } from './rsc/module-classifier.js';
 import { collectClientModules } from './rsc/client-manifest.js';
 
-interface Route {
+interface RscRoute {
   path: string;
-  getServerSideProps?: unknown;
-}
-
-interface RenderResult {
-  html: string;
-  props: Record<string, unknown>;
 }
 
 interface ClientReferenceManifest {
@@ -310,10 +304,7 @@ export default function matcha(): Plugin {
         return;
       }
 
-      const stripped = stripServerCode(code, cleanId);
-      if (stripped !== code) {
-        return { code: stripped, map: null };
-      }
+      return;
     },
 
     generateBundle(_, bundle) {
@@ -368,20 +359,6 @@ export default function matcha(): Plugin {
       const serverOutDir = resolve(root, 'dist/server');
 
       await rm(serverOutDir, { recursive: true, force: true });
-
-      await build({
-        configFile: false,
-        root,
-        build: {
-          ssr: resolve(root, 'src/entry-server.tsx'),
-          outDir: serverOutDir,
-          rollupOptions: {
-            output: {
-              format: 'esm',
-            },
-          },
-        },
-      });
 
       await build({
         configFile: false,
@@ -451,19 +428,13 @@ export default function matcha(): Plugin {
         },
       });
 
-      const serverEntryPath = resolve(serverOutDir, 'entry-server.js');
-      const serverEntryUrl = pathToFileURL(serverEntryPath).href;
-      const { render, loadStaticProps, routes } = await import(serverEntryUrl) as {
-        render: (url: string) => Promise<RenderResult>;
-        loadStaticProps: (url: string) => Promise<Record<string, unknown>>;
-        routes: Route[];
+      const rscEntryPath = resolve(serverOutDir, 'entry-rsc-server.js');
+      const rscEntryUrl = pathToFileURL(rscEntryPath).href;
+      const { rscRoutes } = await import(rscEntryUrl) as {
+        rscRoutes: RscRoute[];
       };
 
-      const ssrRoutes = routes
-        .filter((route) => Boolean(route.getServerSideProps))
-        .map((route) => route.path);
-
-      const ssrRoutesScript = `<script>window.__MATCHA_SSR_ROUTES__=${JSON.stringify(ssrRoutes)}</script>`;
+      const rscRoutePaths = rscRoutes.map((route) => route.path);
       const templatePath = resolve(distDir, 'index.html');
       const template = await readFile(templatePath, 'utf-8');
       const ssrTemplatePath = resolve(serverOutDir, 'ssr-template.html');
@@ -473,15 +444,13 @@ export default function matcha(): Plugin {
       const ssrFunctionCode = `import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadServerSideProps, renderWithProps } from './entry-server.js';
-import { renderHomePayload } from './entry-rsc-server.js';
-import { renderHomeDocument } from './entry-rsc-document.js';
+import { renderRoutePayload } from './entry-rsc-server.js';
+import { renderRscDocument } from './entry-rsc-document.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatePath = path.resolve(__dirname, './ssr-template.html');
-const publicRoot = path.resolve(__dirname, '../public');
 const manifestPath = path.resolve(__dirname, './rsc-client-manifest.json');
-const ssrRoutes = ${JSON.stringify(ssrRoutes)};
+const rscRoutes = ${JSON.stringify(rscRoutePaths)};
 
 function normalizePath(routePath) {
   return routePath === '/' ? routePath : routePath.replace(/\\/$/, '');
@@ -496,26 +465,8 @@ function toRouteTarget(routeTarget) {
   };
 }
 
-function isSsrRoute(routeTarget) {
-  return ssrRoutes.includes(toRouteTarget(routeTarget).pathname);
-}
-
 function isRscRoute(routeTarget) {
-  return toRouteTarget(routeTarget).pathname === '/';
-}
-
-function staticPropsFilePath(routePath) {
-  if (routePath === '/') return path.resolve(publicRoot, '_props.json');
-  return path.resolve(publicRoot, routePath.slice(1), '_props.json');
-}
-
-async function loadCachedStaticProps(routePath) {
-  try {
-    const file = await readFile(staticPropsFilePath(routePath), 'utf-8');
-    return JSON.parse(file);
-  } catch {
-    return {};
-  }
+  return rscRoutes.includes(toRouteTarget(routeTarget).pathname);
 }
 
 async function loadClientManifest() {
@@ -523,41 +474,18 @@ async function loadClientManifest() {
   return JSON.parse(file);
 }
 
-export async function renderRscPage() {
+export async function renderRscPage(routeTarget) {
+  const { target } = toRouteTarget(routeTarget);
   const [template, manifest] = await Promise.all([
     readFile(templatePath, 'utf-8'),
     loadClientManifest(),
   ]);
-  const payload = await renderHomePayload(manifest);
+  const payload = await renderRoutePayload(target, manifest);
 
-  return renderHomeDocument(template, manifest, payload);
+  return renderRscDocument(template, manifest, payload);
 }
 
-export async function renderSsrPage(routeTarget) {
-  const { pathname, target } = toRouteTarget(routeTarget);
-  const [template, staticProps] = await Promise.all([
-    readFile(templatePath, 'utf-8'),
-    loadCachedStaticProps(pathname),
-  ]);
-  const serverProps = await loadServerSideProps(target);
-  const props = { ...staticProps, ...serverProps };
-  const { html: appHtml } = renderWithProps(target, props);
-  const propsScript = \`<script>window.__INITIAL_PROPS__=\${JSON.stringify(props).replace(/</g, '\\\\u003c')}</script>\`;
-  const routesScript = ${JSON.stringify(ssrRoutesScript)};
-
-  return template
-    .replace('<!--ssr-outlet-->', appHtml)
-    .replace('</head>', \`\${propsScript}\${routesScript}</head>\`);
-}
-
-export async function renderRouteProps(routeTarget) {
-  const { pathname, target } = toRouteTarget(routeTarget);
-  const staticProps = await loadCachedStaticProps(pathname);
-  const serverProps = await loadServerSideProps(target);
-  return { ...staticProps, ...serverProps };
-}
-
-export { isSsrRoute, ssrRoutes, isRscRoute };`;
+export { rscRoutes, isRscRoute };`;
       await writeFile(ssrFunctionPath, ssrFunctionCode);
 
       const publicManifestPath = resolve(distDir, 'rsc-client-manifest.json');
@@ -575,41 +503,11 @@ export { isSsrRoute, ssrRoutes, isRscRoute };`;
       };
       await writeFile(serverManifestPath, JSON.stringify(serverManifest, null, 2));
 
-      let renderedCount = 0;
-      for (const route of routes) {
-        const staticProps = await loadStaticProps(route.path);
-        const routeDir = route.path === '/'
-          ? distDir
-          : resolve(distDir, route.path.slice(1));
-
-        await mkdir(routeDir, { recursive: true });
-        const propsPath = resolve(routeDir, '_props.json');
-        await writeFile(propsPath, JSON.stringify(staticProps));
-
-        if (route.path === '/') {
-          console.log('[matcha] / -> RSC document runtime');
-          continue;
-        }
-
-        if (ssrRoutes.includes(route.path)) {
-          console.log(`[matcha] ${route.path} -> SSR runtime`);
-          continue;
-        }
-
-        const { html: appHtml, props } = await render(route.path);
-        const propsScript = `<script>window.__INITIAL_PROPS__=${JSON.stringify(props).replace(/</g, '\\u003c')}</script>`;
-        const finalHtml = template
-          .replace('<!--ssr-outlet-->', appHtml)
-          .replace('</head>', `${propsScript}${ssrRoutesScript}</head>`);
-
-        const htmlPath = resolve(routeDir, 'index.html');
-        await writeFile(htmlPath, finalHtml);
-
-        renderedCount += 1;
-        console.log(`[matcha] ${route.path} -> ${htmlPath.replace(root + '/', '')}`);
+      for (const routePath of rscRoutePaths) {
+        console.log(`[matcha] ${routePath} -> RSC document runtime`);
       }
 
-      console.log(`[matcha] Static pages: ${renderedCount}, SSR pages: ${ssrRoutes.length}, RSC pages: 1`);
+      console.log(`[matcha] RSC pages: ${rscRoutePaths.length}`);
       console.log(`[matcha] SSR function: ${ssrFunctionPath.replace(root + '/', '')}`);
     },
   };
