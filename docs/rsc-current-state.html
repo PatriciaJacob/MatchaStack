@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MatchaStack RSC Pipeline</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17201b;
+        --muted: #5b665f;
+        --paper: #f8f5ee;
+        --line: #c9d0c5;
+        --accent: #2f7d52;
+        --accent-soft: #d9eadf;
+        --server: #e8eee7;
+        --client: #e9edf5;
+        --legacy: #f0e7df;
+        --code: #18211c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 28px 64px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+        gap: 36px;
+        align-items: end;
+        padding: 22px 0 34px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 760px;
+        font-size: clamp(42px, 7vw, 82px);
+        line-height: 0.94;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 0 0 18px;
+        font-size: 24px;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow: auto;
+        color: #f4fff7;
+        background: var(--code);
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .summary {
+        display: grid;
+        gap: 12px;
+      }
+
+      .summary-row {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      .summary-row strong {
+        font-size: 13px;
+      }
+
+      .section {
+        padding: 42px 0 0;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-size: 13px;
+        background: rgba(255, 255, 255, 0.45);
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .dot.server {
+        background: #6c8f74;
+      }
+
+      .dot.client {
+        background: #58739d;
+      }
+
+      .dot.legacy {
+        background: #a87855;
+      }
+
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(150px, 1fr));
+        gap: 10px;
+        align-items: stretch;
+        margin-top: 18px;
+      }
+
+      .stage {
+        min-height: 168px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.48);
+        position: relative;
+      }
+
+      .stage::after {
+        content: "->";
+        position: absolute;
+        right: -13px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .stage:last-child::after {
+        content: "";
+      }
+
+      .stage.server {
+        background: var(--server);
+      }
+
+      .stage.client {
+        background: var(--client);
+      }
+
+      .stage.legacy {
+        background: var(--legacy);
+      }
+
+      .stage small {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+
+      .stage p {
+        font-size: 14px;
+      }
+
+      .data-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .data-block {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .data-block header {
+        display: block;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .data-block header strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .data-block header span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+
+      .tracks {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .track {
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: 16px;
+        align-items: start;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .track strong {
+        font-size: 14px;
+      }
+
+      .track p {
+        font-size: 14px;
+      }
+
+      .note {
+        padding: 16px 18px;
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+      }
+
+      @media (max-width: 980px) {
+        header,
+        .split,
+        .data-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .pipeline {
+          grid-template-columns: 1fr;
+        }
+
+        .stage::after {
+          content: "down";
+          right: 16px;
+          top: auto;
+          bottom: -20px;
+          transform: none;
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>MatchaStack RSC Pipeline</h1>
+          <div class="legend" aria-label="Legend">
+            <span class="tag"><span class="dot server"></span>Server graph</span>
+            <span class="tag"><span class="dot client"></span>Browser graph</span>
+            <span class="tag"><span class="dot legacy"></span>Legacy props path</span>
+          </div>
+        </div>
+        <div class="summary">
+          <div class="summary-row">
+            <strong>Status</strong>
+            <p>Milestone 1 is complete for <code>/</code>: a full document request renders through Flight, a generated manifest resolves a client island, and the browser hydrates the island.</p>
+          </div>
+          <div class="summary-row">
+            <strong>Scope</strong>
+            <p><code>/</code> uses RSC. <code>/about</code> still uses static props. <code>/user-profile</code> still uses request-time SSR props.</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="section">
+        <h2>Full Document Request For <code>/</code></h2>
+        <div class="pipeline">
+          <div class="stage client">
+            <h3>1. Browser</h3>
+            <small>HTTP request</small>
+            <p><code>GET /</code> asks for a document, not a props JSON file.</p>
+          </div>
+          <div class="stage server">
+            <h3>2. Route Gate</h3>
+            <small>Express handler</small>
+            <p><code>isRscRoute("/")</code> selects the RSC document pipeline.</p>
+          </div>
+          <div class="stage server">
+            <h3>3. RSC Render</h3>
+            <small>entry-rsc-server</small>
+            <p><code>renderToPipeableStream(&lt;HomePage /&gt;, serverModuleMap)</code> creates Flight rows.</p>
+          </div>
+          <div class="stage server">
+            <h3>4. HTML Shell</h3>
+            <small>entry-rsc-document</small>
+            <p>The server reads the Flight payload back into a React node and renders initial HTML.</p>
+          </div>
+          <div class="stage client">
+            <h3>5. Bootstrap</h3>
+            <small>inline script</small>
+            <p>The document embeds a browser manifest and a base64 Flight payload.</p>
+          </div>
+          <div class="stage client">
+            <h3>6. Hydration</h3>
+            <small>entry-client</small>
+            <p>The browser decodes Flight, imports the counter chunk, and hydrates the page.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section split">
+        <div>
+          <h2>Build Artifacts</h2>
+          <div class="tracks">
+            <div class="track">
+              <strong>Client bundle</strong>
+              <p>Contains browser code, including <code>HomeCounter.client.tsx</code> as a chunk.</p>
+            </div>
+            <div class="track">
+              <strong>RSC server bundle</strong>
+              <p>Transforms <code>'use client'</code> modules into <code>registerClientReference</code> proxies instead of executing client code.</p>
+            </div>
+            <div class="track">
+              <strong>Public manifest</strong>
+              <p>Contains <code>moduleMap</code>, <code>serverModuleMap</code>, and <code>chunkMap</code>. This is safe to send to the browser.</p>
+            </div>
+            <div class="track">
+              <strong>Server manifest</strong>
+              <p>Adds <code>ssrChunkMap</code> so the server document renderer can import SSR-safe client islands while rendering the shell.</p>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <p>The dev server now uses one Vite server. RSC loads enter the same server through <code>?matcha-rsc</code>, which creates an RSC-scoped module graph inside the existing Vite process.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Data Formats At Each Boundary</h2>
+        <div class="data-grid">
+          <article class="data-block">
+            <header>
+              <strong>Client Component Source</strong>
+              <span>Authored module boundary</span>
+            </header>
+            <pre><code>'use client';
+
+export default function HomeCounter() {
+  const [count, setCount] = React.useState(0);
+  return &lt;button&gt;Clicked {count} times&lt;/button&gt;;
+}</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>RSC Server Proxy</strong>
+              <span>Generated when the RSC graph imports a client module</span>
+            </header>
+            <pre><code>export default registerClientReference(
+  function clientReferenceProxy() {
+    throw new Error("Cannot call client export on the server.");
+  },
+  "src/rsc/HomeCounter.client.tsx",
+  "default"
+);</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Public Client Manifest</strong>
+              <span>Sent to the browser</span>
+            </header>
+            <pre><code>{
+  "moduleMap": {
+    "src/rsc/HomeCounter.client.tsx": {
+      "default": {
+        "id": "src/rsc/HomeCounter.client.tsx",
+        "chunks": [
+          "src/rsc/HomeCounter.client.tsx",
+          "assets/HomeCounter.client-[hash].js"
+        ],
+        "name": "default"
+      }
+    }
+  },
+  "serverModuleMap": {
+    "src/rsc/HomeCounter.client.tsx#default": {
+      "id": "src/rsc/HomeCounter.client.tsx",
+      "chunks": [
+        "src/rsc/HomeCounter.client.tsx",
+        "assets/HomeCounter.client-[hash].js"
+      ],
+      "name": "default"
+    }
+  },
+  "chunkMap": {
+    "src/rsc/HomeCounter.client.tsx":
+      "/assets/HomeCounter.client-[hash].js"
+  }
+}</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Server-Only Manifest Extension</strong>
+              <span>Loaded by <code>dist/server/ssr-function.js</code></span>
+            </header>
+            <pre><code>{
+  "...publicManifest": "...",
+  "ssrChunkMap": {
+    "src/rsc/HomeCounter.client.tsx":
+      "/absolute/path/dist/server/rsc-client/src_rsc_HomeCounter_client_tsx.js"
+  }
+}</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Flight Payload Rows</strong>
+              <span>Text stream before base64 embedding</span>
+            </header>
+            <pre><code>7:I[
+  "src/rsc/HomeCounter.client.tsx",
+  [
+    "src/rsc/HomeCounter.client.tsx",
+    "assets/HomeCounter.client-[hash].js"
+  ],
+  "default"
+]
+
+0:[
+  "$",
+  "div",
+  null,
+  {
+    "children": [
+      ["$", "h1", null, { "children": "MatchaStack" }],
+      ["$", "$L7", null, {}]
+    ]
+  }
+]</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>HTML Bootstrap</strong>
+              <span>Inline document state</span>
+            </header>
+            <pre><code>&lt;script&gt;
+window.__MATCHA_RSC_ENABLED__ = true;
+window.__MATCHA_RSC_MANIFEST__ = {
+  moduleMap,
+  serverModuleMap,
+  chunkMap
+};
+window.__MATCHA_RSC_PAYLOAD__ = "base64(Flight rows)";
+&lt;/script&gt;</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Client Decode</strong>
+              <span><code>src/entry-client.tsx</code></span>
+            </header>
+            <pre><code>const stream = createStreamFromBase64(
+  window.__MATCHA_RSC_PAYLOAD__
+);
+
+const node = await createFromReadableStream(stream, {
+  serverConsumerManifest: {
+    moduleMap,
+    serverModuleMap,
+    moduleLoading: null
+  }
+});
+
+hydrateRoot(appRoot, node);</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Client Module Loading</strong>
+              <span>Webpack-compatible runtime shim</span>
+            </header>
+            <pre><code>__webpack_chunk_load__(moduleId)
+  -> chunkMap[moduleId]
+  -> import("/assets/HomeCounter.client-[hash].js")
+
+__webpack_require__(moduleId)
+  -> loaded module namespace</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Current Route Split</h2>
+        <div class="pipeline">
+          <div class="stage server">
+            <h3>/</h3>
+            <small>RSC document</small>
+            <p>Flight payload plus HTML shell. No <code>__INITIAL_PROPS__</code>.</p>
+          </div>
+          <div class="stage legacy">
+            <h3>/about</h3>
+            <small>Static props</small>
+            <p>Build-time props are written to <code>_props.json</code> and embedded in static HTML.</p>
+          </div>
+          <div class="stage legacy">
+            <h3>/user-profile</h3>
+            <small>SSR props</small>
+            <p>Request-time props still flow through <code>/__matcha_props</code> for client navigation.</p>
+          </div>
+          <div class="stage client">
+            <h3>Next milestone</h3>
+            <small>All document routes</small>
+            <p>Generalize the RSC document pipeline beyond <code>/</code>.</p>
+          </div>
+          <div class="stage client">
+            <h3>Later</h3>
+            <small>Flight navigation</small>
+            <p>Replace props JSON navigation with route Flight subrequests.</p>
+          </div>
+          <div class="stage client">
+            <h3>Later</h3>
+            <small>Server actions</small>
+            <p>Add <code>'use server'</code> references and action response payloads.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

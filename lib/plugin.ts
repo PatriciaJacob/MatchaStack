@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import ts from 'typescript';
 import { analyzeModule, stripModuleDirectives, stripServerCode, toModuleId } from './rsc/module-classifier.js';
 import { collectClientModules } from './rsc/client-manifest.js';
 
@@ -20,7 +21,7 @@ interface ClientReferenceManifest {
   moduleMap: Record<string, Record<string, { id: string; chunks: string[]; name: string; async?: boolean }>>;
   serverModuleMap: Record<string, { id: string; chunks: string[]; name: string; async?: boolean }>;
   chunkMap: Record<string, string>;
-  ssrChunkMap: Record<string, string>;
+  ssrChunkMap?: Record<string, string>;
 }
 
 interface ClientModuleRecord {
@@ -71,7 +72,61 @@ function createClientReferenceModuleCode(moduleId: string, exportNames: string[]
   return `${lines.join('\n')}\n`;
 }
 
-function createRscBuildPlugin(root: string): Plugin {
+function replaceModuleSpecifiers(
+  code: string,
+  fileName: string,
+  mapSpecifier: (specifier: string) => string,
+): string {
+  const sourceFile = ts.createSourceFile(fileName, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const replacements: Array<{ start: number; end: number; value: string }> = [];
+
+  const addReplacement = (literal: ts.StringLiteral) => {
+    const nextValue = mapSpecifier(literal.text);
+    if (nextValue === literal.text) {
+      return;
+    }
+
+    replacements.push({
+      start: literal.getStart(sourceFile) + 1,
+      end: literal.end - 1,
+      value: nextValue,
+    });
+  };
+
+  for (const statement of sourceFile.statements) {
+    if (statement.kind === ts.SyntaxKind.ImportDeclaration) {
+      const moduleSpecifier = (statement as import('typescript').ImportDeclaration).moduleSpecifier;
+      if (ts.isStringLiteral(moduleSpecifier)) {
+        addReplacement(moduleSpecifier);
+      }
+    }
+
+    if (statement.kind === ts.SyntaxKind.ExportDeclaration) {
+      const moduleSpecifier = (statement as import('typescript').ExportDeclaration).moduleSpecifier;
+      if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+        addReplacement(moduleSpecifier);
+      }
+    }
+  }
+
+  return replacements
+    .reverse()
+    .reduce((nextCode, replacement) => {
+      return `${nextCode.slice(0, replacement.start)}${replacement.value}${nextCode.slice(replacement.end)}`;
+    }, code);
+}
+
+const RSC_DEV_QUERY = '?matcha-rsc';
+
+function isRscDevId(id: string | undefined): id is string {
+  return Boolean(id?.includes(RSC_DEV_QUERY));
+}
+
+function stripRscDevQuery(id: string): string {
+  return id.replace(RSC_DEV_QUERY, '');
+}
+
+export function createRscBuildPlugin(root: string): Plugin {
   return {
     name: 'matcha-rsc-server-build',
 
@@ -88,6 +143,84 @@ function createRscBuildPlugin(root: string): Plugin {
 
       return {
         code: createClientReferenceModuleCode(toModuleId(root, cleanId), analysis.exports),
+        map: null,
+      };
+    },
+  };
+}
+
+export function createRscDevPlugin(root: string): Plugin {
+  const rscRuntimeAliases = new Map<string, string>([
+    ['react', resolve(root, 'lib/rsc/react-server-runtime/react.js')],
+    ['react/jsx-runtime', resolve(root, 'lib/rsc/react-server-runtime/jsx-runtime.js')],
+    ['react/jsx-dev-runtime', resolve(root, 'lib/rsc/react-server-runtime/jsx-dev-runtime.js')],
+    ['react-server-dom-webpack/server.node', resolve(root, 'lib/rsc/react-server-runtime/rsc-server-node.js')],
+  ]);
+  const mapRscSpecifier = (specifier: string): string => {
+    const runtimeAlias = rscRuntimeAliases.get(specifier);
+    if (runtimeAlias) {
+      return runtimeAlias;
+    }
+
+    if (specifier.startsWith('.') || specifier.startsWith('/src/')) {
+      return specifier.includes(RSC_DEV_QUERY) ? specifier : `${specifier}${RSC_DEV_QUERY}`;
+    }
+
+    return specifier;
+  };
+
+  return {
+    name: 'matcha-rsc-dev',
+    enforce: 'pre',
+
+    async resolveId(source, importer) {
+      if (rscRuntimeAliases.has(source) && isRscDevId(importer)) {
+        return rscRuntimeAliases.get(source);
+      }
+
+      if (!source.includes(RSC_DEV_QUERY) && !isRscDevId(importer)) {
+        return;
+      }
+
+      const cleanSource = stripRscDevQuery(source);
+      const cleanImporter = importer ? stripRscDevQuery(importer) : undefined;
+      const resolved = await this.resolve(cleanSource, cleanImporter, { skipSelf: true });
+      if (!resolved) {
+        return;
+      }
+
+      const cleanResolvedId = stripRscDevQuery(resolved.id);
+      if (!cleanResolvedId.includes('/src/') || !isSourceModule(cleanResolvedId)) {
+        return cleanResolvedId;
+      }
+
+      return `${cleanResolvedId}${RSC_DEV_QUERY}`;
+    },
+
+    transform(code, id) {
+      if (!isRscDevId(id)) {
+        return;
+      }
+
+      const cleanId = stripRscDevQuery(id);
+      if (!cleanId.includes('/src/') || !isSourceModule(cleanId)) {
+        return;
+      }
+
+      const analysis = analyzeModule(code, cleanId);
+      if (!analysis.useClient) {
+        return {
+          code: replaceModuleSpecifiers(code, cleanId, mapRscSpecifier),
+          map: null,
+        };
+      }
+
+      return {
+        code: replaceModuleSpecifiers(
+          createClientReferenceModuleCode(toModuleId(root, cleanId), analysis.exports),
+          cleanId,
+          mapRscSpecifier,
+        ),
         map: null,
       };
     },
@@ -192,7 +325,6 @@ export default function matcha(): Plugin {
         moduleMap: {},
         serverModuleMap: {},
         chunkMap: {},
-        ssrChunkMap: {},
       };
 
       for (const [filePath, record] of clientModules) {
@@ -348,7 +480,7 @@ import { renderHomeDocument } from './entry-rsc-document.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatePath = path.resolve(__dirname, './ssr-template.html');
 const publicRoot = path.resolve(__dirname, '../public');
-const manifestPath = path.resolve(publicRoot, 'rsc-client-manifest.json');
+const manifestPath = path.resolve(__dirname, './rsc-client-manifest.json');
 const ssrRoutes = ${JSON.stringify(ssrRoutes)};
 
 function normalizePath(routePath) {
@@ -428,16 +560,20 @@ export async function renderRouteProps(routeTarget) {
 export { isSsrRoute, ssrRoutes, isRscRoute };`;
       await writeFile(ssrFunctionPath, ssrFunctionCode);
 
-      const manifestPath = resolve(distDir, 'rsc-client-manifest.json');
-      const manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) as ClientReferenceManifest;
-      manifest.ssrChunkMap = Object.fromEntries(
-        [...clientModules.keys()].map((filePath) => {
-          const moduleId = toModuleId(root, filePath);
-          const entryName = toSsrClientEntryName(root, filePath);
-          return [moduleId, resolve(serverOutDir, 'rsc-client', `${entryName}.js`)];
-        }),
-      );
-      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+      const publicManifestPath = resolve(distDir, 'rsc-client-manifest.json');
+      const serverManifestPath = resolve(serverOutDir, 'rsc-client-manifest.json');
+      const manifest = JSON.parse(await readFile(publicManifestPath, 'utf-8')) as ClientReferenceManifest;
+      const serverManifest: ClientReferenceManifest = {
+        ...manifest,
+        ssrChunkMap: Object.fromEntries(
+          [...clientModules.keys()].map((filePath) => {
+            const moduleId = toModuleId(root, filePath);
+            const entryName = toSsrClientEntryName(root, filePath);
+            return [moduleId, resolve(serverOutDir, 'rsc-client', `${entryName}.js`)];
+          }),
+        ),
+      };
+      await writeFile(serverManifestPath, JSON.stringify(serverManifest, null, 2));
 
       let renderedCount = 0;
       for (const route of routes) {

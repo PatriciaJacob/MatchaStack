@@ -104,6 +104,8 @@ The milestones below are intentionally vertical. Each one should leave the repo 
 
 ## Milestone 1: Single-Route RSC Document Render
 
+Status: Complete for `/`.
+
 ### End state
 
 One route can render through real Flight on a full document request, with a real client reference manifest and at least one `'use client'` island working end to end.

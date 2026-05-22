@@ -1,4 +1,4 @@
-import HomeCounter from './HomeCounter.client-reference.js';
+import HomeCounter from './HomeCounter.client.js';
 
 export default function HomePage() {
   return (

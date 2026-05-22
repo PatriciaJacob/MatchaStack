@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { buildDevClientManifest, collectClientModules } from '../rsc/client-manifest.js';
+import { createRscDevPlugin } from '../plugin.js';
 
 export const description = 'Start development server with HMR and SSR';
 
@@ -13,19 +14,7 @@ export async function run() {
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: 'custom',
-  });
-  const rscVite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'custom',
-    resolve: {
-      alias: [
-        { find: /^react$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/react.js') },
-        { find: /^react\/jsx-runtime$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/jsx-runtime.js') },
-        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/jsx-dev-runtime.js') },
-        { find: /^react-server-dom-webpack\/server\.node$/, replacement: path.resolve(root, 'lib/rsc/react-server-runtime/rsc-server-node.js') },
-      ],
-      conditions: ['react-server', 'node', 'import', 'module', 'default'],
-    },
+    plugins: [createRscDevPlugin(root)],
   });
 
   app.get('/__matcha_props', async (req, res) => {
@@ -69,7 +58,7 @@ export async function run() {
 
       if ((req.path === '/' || req.path === '') && req.method === 'GET') {
         const [rscEntry, rscDocumentEntry, clientModules] = await Promise.all([
-          rscVite.ssrLoadModule('/src/entry-rsc-server.tsx'),
+          vite.ssrLoadModule('/src/entry-rsc-server.tsx?matcha-rsc'),
           vite.ssrLoadModule('/src/entry-rsc-document.tsx'),
           collectClientModules(root),
         ]);
