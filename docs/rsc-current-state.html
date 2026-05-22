@@ -300,11 +300,11 @@
         <div class="summary">
           <div class="summary-row">
             <strong>Status</strong>
-            <p>Milestone 2 is complete for the current routes: document requests render through Flight, generated manifests resolve client islands, and the browser hydrates from the embedded RSC payload.</p>
+            <p>Milestone 3 is complete for the current routes: document requests and same-origin client navigations both render through Flight.</p>
           </div>
           <div class="summary-row">
             <strong>Scope</strong>
-            <p><code>/</code>, <code>/about</code>, and <code>/user-profile</code> are all real RSC routes. The old loader files and props transport are gone.</p>
+            <p><code>/</code>, <code>/about</code>, and <code>/user-profile</code> are real RSC routes. The browser navigates between them with <code>/__matcha_rsc</code> payloads instead of document reloads.</p>
           </div>
         </div>
       </header>
@@ -341,6 +341,42 @@
             <h3>6. Hydration</h3>
             <small>entry-client</small>
             <p>The browser decodes Flight, imports the counter chunk, and hydrates the page.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Client Navigation Request</h2>
+        <div class="pipeline">
+          <div class="stage client">
+            <h3>1. Click</h3>
+            <small>entry-client</small>
+            <p>A same-origin <code>&lt;a&gt;</code> click is intercepted unless it is modified, external, targeted, or a download.</p>
+          </div>
+          <div class="stage client">
+            <h3>2. Fetch</h3>
+            <small>Flight endpoint</small>
+            <p><code>GET /__matcha_rsc?path=/user-profile</code> requests raw Flight rows with <code>Accept: text/x-component</code>.</p>
+          </div>
+          <div class="stage server">
+            <h3>3. Render</h3>
+            <small>entry-rsc-server</small>
+            <p>The endpoint calls <code>renderRoutePayload(path, manifest)</code> and returns <code>text/x-component</code>.</p>
+          </div>
+          <div class="stage client">
+            <h3>4. Decode</h3>
+            <small>Flight client</small>
+            <p><code>createFromReadableStream(response.body)</code> resolves the next React tree using the browser manifest.</p>
+          </div>
+          <div class="stage client">
+            <h3>5. Commit</h3>
+            <small>React root</small>
+            <p><code>history.pushState</code> updates the URL and <code>root.render</code> applies the decoded RSC tree.</p>
+          </div>
+          <div class="stage client">
+            <h3>6. Restore</h3>
+            <small>popstate</small>
+            <p>Back and forward fetch the current URL through the same Flight endpoint.</p>
           </div>
         </div>
       </section>
@@ -526,7 +562,7 @@ window.__MATCHA_RSC_PAYLOAD__ = "base64(Flight rows)";
 
           <article class="data-block">
             <header>
-              <strong>Client Decode</strong>
+              <strong>Initial Client Decode</strong>
               <span><code>src/entry-client.tsx</code></span>
             </header>
             <pre><code>const stream = createStreamFromBase64(
@@ -542,6 +578,36 @@ const node = await createFromReadableStream(stream, {
 });
 
 hydrateRoot(appRoot, node);</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Navigation Flight Fetch</strong>
+              <span>Client transition payload</span>
+            </header>
+            <pre><code>GET /__matcha_rsc?path=/about
+Accept: text/x-component
+
+HTTP/1.1 200 OK
+Content-Type: text/x-component; charset=utf-8
+
+:N1779470661501.049
+1:["$","div",null,{...}]</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Navigation Commit</strong>
+              <span><code>src/entry-client.tsx</code></span>
+            </header>
+            <pre><code>const node = await createFromReadableStream(response.body, {
+  serverConsumerManifest
+});
+
+history.pushState({ __matchaRsc: true }, "", url);
+startTransition(() =&gt; {
+  root.render(&lt;RscRoot&gt;{node}&lt;/RscRoot&gt;);
+});</code></pre>
           </article>
 
           <article class="data-block">
@@ -582,10 +648,10 @@ __webpack_require__(moduleId)
             <small>RSC document</small>
             <p>Unknown paths still return an HTML shell and Flight payload, with a 404 status.</p>
           </div>
-          <div class="stage future">
-            <h3>Next milestone</h3>
+          <div class="stage client">
+            <h3>Navigation</h3>
             <small>Flight navigation</small>
-            <p>Client-side route changes should request Flight and apply the returned tree.</p>
+            <p>Same-origin link clicks and back/forward fetch <code>/__matcha_rsc</code> and render the returned tree.</p>
           </div>
           <div class="stage future">
             <h3>Later</h3>

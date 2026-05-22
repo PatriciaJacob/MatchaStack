@@ -163,6 +163,8 @@ After this step, a browser refresh on any route uses the real RSC render path, s
 
 ## Milestone 3: RSC Client Navigation
 
+Status: Complete for same-origin anchors and browser back/forward.
+
 ### End state
 
 Client-side navigation fetches Flight payloads instead of route props, so the app works as a genuine RSC app during both initial load and in-app navigation.
@@ -358,5 +360,4 @@ If server actions are in scope for the release, also require:
 
 ## Immediate Next Step
 
-- implement and visualize Flight-backed navigation
 - explore reloads, Suspense behavior, streaming, and server action transport

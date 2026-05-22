@@ -474,6 +474,12 @@ async function loadClientManifest() {
   return JSON.parse(file);
 }
 
+export async function renderRscPayload(routeTarget) {
+  const { target } = toRouteTarget(routeTarget);
+  const manifest = await loadClientManifest();
+  return renderRoutePayload(target, manifest);
+}
+
 export async function renderRscPage(routeTarget) {
   const { target } = toRouteTarget(routeTarget);
   const [template, manifest] = await Promise.all([
