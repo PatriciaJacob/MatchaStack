@@ -304,7 +304,7 @@
           </div>
           <div class="summary-row">
             <strong>Scope</strong>
-            <p><code>/</code>, <code>/about</code>, and <code>/user-profile</code> are real RSC routes. The browser navigates between them with <code>/__matcha_rsc</code> payloads instead of document reloads.</p>
+            <p><code>/</code>, <code>/about</code>, <code>/user-profile</code>, and <code>/suspense-demo</code> are real RSC routes. The browser navigates between them with <code>/__matcha_rsc</code> payloads instead of document reloads.</p>
           </div>
         </div>
       </header>
@@ -495,7 +495,8 @@ export default function HomeCounter() {
             <pre><code>[
   { path: "/", render: () =&gt; &lt;HomePage /&gt; },
   { path: "/about", render: () =&gt; &lt;AboutPage /&gt; },
-  { path: "/user-profile", render: () =&gt; &lt;UserProfilePage /&gt; }
+  { path: "/user-profile", render: () =&gt; &lt;UserProfilePage /&gt; },
+  { path: "/suspense-demo", render: () =&gt; &lt;SuspenseDemoPage /&gt; }
 ]</code></pre>
           </article>
 
@@ -642,6 +643,11 @@ __webpack_require__(moduleId)
             <h3>/user-profile</h3>
             <small>RSC document</small>
             <p>Server component creates request-time profile data inside the route tree.</p>
+          </div>
+          <div class="stage server">
+            <h3>/suspense-demo</h3>
+            <small>Buffered Suspense demo</small>
+            <p>Async server component waits for 2 seconds inside Suspense; today the route appears after the whole Flight payload is ready.</p>
           </div>
           <div class="stage server">
             <h3>404</h3>

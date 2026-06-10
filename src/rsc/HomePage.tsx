@@ -11,6 +11,8 @@ export default function HomePage() {
         <a href="/about">Go to About</a>
         {' | '}
         <a href="/user-profile">View User Sample</a>
+        {' | '}
+        <a href="/suspense-demo">Open Suspense Demo</a>
       </nav>
     </div>
   );

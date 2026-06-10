@@ -46,6 +46,8 @@ export default function UserProfilePage() {
 
       <nav>
         <a href="/">Go Home</a>
+        {' | '}
+        <a href="/suspense-demo">Open Suspense Demo</a>
       </nav>
     </div>
   );

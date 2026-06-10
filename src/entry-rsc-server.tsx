@@ -4,6 +4,7 @@ import { renderToPipeableStream } from 'react-server-dom-webpack/server.node';
 import HomePage from './rsc/HomePage.js';
 import AboutPage from './rsc/AboutPage.js';
 import UserProfilePage from './rsc/UserProfilePage.js';
+import SuspenseDemoPage from './rsc/SuspenseDemoPage.js';
 import { ClientManifest } from './rsc/client-reference-runtime.js';
 
 interface RscRoute {
@@ -15,6 +16,7 @@ export const rscRoutes: RscRoute[] = [
   { path: '/', render: () => <HomePage /> },
   { path: '/about', render: () => <AboutPage /> },
   { path: '/user-profile', render: () => <UserProfilePage /> },
+  { path: '/suspense-demo', render: () => <SuspenseDemoPage /> },
 ];
 
 function normalizePath(routePath: string): string {
