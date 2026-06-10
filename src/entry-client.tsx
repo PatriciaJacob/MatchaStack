@@ -11,10 +11,10 @@ declare global {
 }
 
 const appRoot = document.getElementById('app')!;
-let root: ReactDOM.Root | undefined;
 let navigationVersion = 0;
 
 type CreateFromReadableStream = typeof import('react-server-dom-webpack/client.edge').createFromReadableStream;
+type SetRscTree = React.Dispatch<React.SetStateAction<React.ReactNode>>;
 let createFromReadableStreamPromise: Promise<CreateFromReadableStream> | undefined;
 
 function getManifest(): ClientManifest {
@@ -47,20 +47,6 @@ function createStreamFromBase64(base64: string): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
-}
-
-function renderRscNode(node: React.ReactNode) {
-  if (!root) {
-    throw new Error('MatchaStack attempted to render before hydration.');
-  }
-
-  root.render(
-    <React.StrictMode>
-      <div data-matcha-rsc-root>
-        {node}
-      </div>
-    </React.StrictMode>,
-  );
 }
 
 async function decodeRscStream(stream: ReadableStream<Uint8Array>): Promise<React.ReactNode> {
@@ -137,7 +123,7 @@ function shouldHandleLinkClick(event: MouseEvent): URL | null {
   return url;
 }
 
-async function navigateTo(url: URL, mode: 'push' | 'replace' | 'restore') {
+async function navigateTo(url: URL, mode: 'push' | 'restore', setTree: SetRscTree) {
   const version = navigationVersion + 1;
   navigationVersion = version;
 
@@ -150,12 +136,10 @@ async function navigateTo(url: URL, mode: 'push' | 'replace' | 'restore') {
     if (mode === 'push') {
       window.history.pushState({ __matchaRsc: true }, '', url);
       window.scrollTo({ left: 0, top: 0 });
-    } else if (mode === 'replace') {
-      window.history.replaceState({ __matchaRsc: true }, '', url);
     }
 
     React.startTransition(() => {
-      renderRscNode(node);
+      setTree(node);
     });
   } catch (error) {
     if (mode === 'restore') {
@@ -167,22 +151,44 @@ async function navigateTo(url: URL, mode: 'push' | 'replace' | 'restore') {
   }
 }
 
-function installRscNavigation() {
+function installRscNavigation(setTree: SetRscTree): () => void {
   window.history.replaceState({ __matchaRsc: true }, '', window.location.href);
 
-  window.addEventListener('click', (event) => {
+  function handleClick(event: MouseEvent) {
     const url = shouldHandleLinkClick(event);
     if (!url) {
       return;
     }
 
     event.preventDefault();
-    void navigateTo(url, 'push');
-  });
+    void navigateTo(url, 'push', setTree);
+  }
 
-  window.addEventListener('popstate', () => {
-    void navigateTo(new URL(window.location.href), 'restore');
-  });
+  function handlePopState() {
+    void navigateTo(new URL(window.location.href), 'restore', setTree);
+  }
+
+  window.addEventListener('click', handleClick);
+  window.addEventListener('popstate', handlePopState);
+
+  return () => {
+    window.removeEventListener('click', handleClick);
+    window.removeEventListener('popstate', handlePopState);
+  };
+}
+
+function MatchaRoot({ initialTree }: { initialTree: React.ReactNode }) {
+  const [tree, setTree] = React.useState(initialTree);
+
+  React.useEffect(() => {
+    return installRscNavigation(setTree);
+  }, []);
+
+  return (
+    <div data-matcha-rsc-root>
+      {tree}
+    </div>
+  );
 }
 
 async function bootstrapRsc() {
@@ -196,15 +202,12 @@ async function bootstrapRsc() {
   });
   const resolvedNode = await decodeInitialRscPayload();
 
-  root = ReactDOM.hydrateRoot(
+  ReactDOM.hydrateRoot(
     appRoot,
     <React.StrictMode>
-      <div data-matcha-rsc-root>
-        {resolvedNode}
-      </div>
+      <MatchaRoot initialTree={resolvedNode} />
     </React.StrictMode>,
   );
-  installRscNavigation();
 }
 
 if (!window.__MATCHA_RSC_ENABLED__ || !window.__MATCHA_RSC_MANIFEST__ || !window.__MATCHA_RSC_PAYLOAD__) {

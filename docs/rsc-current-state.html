@@ -371,7 +371,7 @@
           <div class="stage client">
             <h3>5. Commit</h3>
             <small>React root</small>
-            <p><code>history.pushState</code> updates the URL and <code>root.render</code> applies the decoded RSC tree.</p>
+            <p><code>history.pushState</code> updates the URL and <code>MatchaRoot</code> applies the decoded RSC tree through state.</p>
           </div>
           <div class="stage client">
             <h3>6. Restore</h3>
@@ -606,7 +606,7 @@ Content-Type: text/x-component; charset=utf-8
 
 history.pushState({ __matchaRsc: true }, "", url);
 startTransition(() =&gt; {
-  root.render(&lt;RscRoot&gt;{node}&lt;/RscRoot&gt;);
+  setTree(node);
 });</code></pre>
           </article>
 
