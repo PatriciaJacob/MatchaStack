@@ -361,7 +361,7 @@
           <div class="stage server">
             <h3>3. Render</h3>
             <small>entry-rsc-server</small>
-            <p>The endpoint calls <code>renderRoutePayload(path, manifest)</code> and returns <code>text/x-component</code>.</p>
+            <p>The endpoint calls <code>renderRoutePayloadStream(path, manifest)</code> and pipes <code>text/x-component</code> rows.</p>
           </div>
           <div class="stage client">
             <h3>4. Decode</h3>
@@ -371,7 +371,7 @@
           <div class="stage client">
             <h3>5. Commit</h3>
             <small>React root</small>
-            <p><code>history.pushState</code> updates the URL and <code>MatchaRoot</code> applies the decoded RSC tree through state.</p>
+            <p><code>history.pushState</code> updates the URL and <code>MatchaRoot</code> stores the pending RSC tree in state.</p>
           </div>
           <div class="stage client">
             <h3>6. Restore</h3>
@@ -601,13 +601,13 @@ Content-Type: text/x-component; charset=utf-8
               <strong>Navigation Commit</strong>
               <span><code>src/entry-client.tsx</code></span>
             </header>
-            <pre><code>const node = await createFromReadableStream(response.body, {
+            <pre><code>const tree = createFromReadableStream(response.body, {
   serverConsumerManifest
 });
 
 history.pushState({ __matchaRsc: true }, "", url);
 startTransition(() =&gt; {
-  setTree(node);
+  setTree({ status: "pending", response: tree });
 });</code></pre>
           </article>
 
@@ -646,8 +646,8 @@ __webpack_require__(moduleId)
           </div>
           <div class="stage server">
             <h3>/suspense-demo</h3>
-            <small>Buffered Suspense demo</small>
-            <p>Async server component waits for 2 seconds inside Suspense; today the route appears after the whole Flight payload is ready.</p>
+            <small>Streaming Suspense demo</small>
+            <p>Async server component waits for 2 seconds inside Suspense; navigation shows the route while the slow panel fallback is pending.</p>
           </div>
           <div class="stage server">
             <h3>404</h3>

@@ -7,7 +7,10 @@ import { pathToFileURL } from 'node:url';
 interface RscFunctionModule {
   isRscRoute: (path: string) => boolean;
   renderRscPage: (path: string) => Promise<string>;
-  renderRscPayload: (path: string) => Promise<string>;
+  renderRscPayloadStream: (path: string) => Promise<{
+    pipe: (destination: NodeJS.WritableStream) => void;
+    abort: () => void;
+  }>;
 }
 
 export const description = 'Serve the production build with RSC routes';
@@ -35,15 +38,28 @@ export async function run() {
     const routeTarget = typeof rawPath === 'string' && rawPath.startsWith('/') ? rawPath : '/';
 
     try {
-      const payload = await rscFunction.renderRscPayload(routeTarget);
+      const stream = await rscFunction.renderRscPayloadStream(routeTarget);
       const status = rscFunction.isRscRoute(routeTarget) ? 200 : 404;
       res
         .status(status)
         .set({
           'Content-Type': 'text/x-component; charset=utf-8',
           'Cache-Control': 'no-store',
-        })
-        .end(payload);
+        });
+
+      res.flushHeaders();
+
+      let completed = false;
+      res.on('finish', () => {
+        completed = true;
+      });
+      req.on('close', () => {
+        if (!completed) {
+          stream.abort();
+        }
+      });
+
+      stream.pipe(res);
     } catch (e) {
       console.error(e);
       res.status(500).end((e as Error).message);

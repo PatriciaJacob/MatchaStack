@@ -14,7 +14,10 @@ const appRoot = document.getElementById('app')!;
 let navigationVersion = 0;
 
 type CreateFromReadableStream = typeof import('react-server-dom-webpack/client.edge').createFromReadableStream;
-type SetRscTree = React.Dispatch<React.SetStateAction<React.ReactNode>>;
+type RscTree =
+  | { status: 'ready'; node: React.ReactNode }
+  | { status: 'pending'; response: Promise<React.ReactNode> };
+type SetRscTree = React.Dispatch<React.SetStateAction<RscTree>>;
 let createFromReadableStreamPromise: Promise<CreateFromReadableStream> | undefined;
 
 function getManifest(): ClientManifest {
@@ -50,8 +53,15 @@ function createStreamFromBase64(base64: string): ReadableStream<Uint8Array> {
 }
 
 async function decodeRscStream(stream: ReadableStream<Uint8Array>): Promise<React.ReactNode> {
-  const manifest = getManifest();
   const createFromReadableStream = await getCreateFromReadableStream();
+  return createRscResponse(stream, createFromReadableStream);
+}
+
+function createRscResponse(
+  stream: ReadableStream<Uint8Array>,
+  createFromReadableStream: CreateFromReadableStream,
+): Promise<React.ReactNode> {
+  const manifest = getManifest();
   const response = createFromReadableStream(
     stream,
     {
@@ -63,7 +73,7 @@ async function decodeRscStream(stream: ReadableStream<Uint8Array>): Promise<Reac
     },
   ) as Promise<React.ReactNode>;
 
-  return await response;
+  return response;
 }
 
 async function decodeInitialRscPayload(): Promise<React.ReactNode> {
@@ -75,7 +85,7 @@ async function decodeInitialRscPayload(): Promise<React.ReactNode> {
   return await decodeRscStream(createStreamFromBase64(payload));
 }
 
-async function fetchRscNode(routeTarget: string): Promise<React.ReactNode> {
+async function fetchRscTree(routeTarget: string): Promise<{ tree: Promise<React.ReactNode> }> {
   const endpoint = new URL('/__matcha_rsc', window.location.origin);
   endpoint.searchParams.set('path', routeTarget);
 
@@ -89,7 +99,10 @@ async function fetchRscNode(routeTarget: string): Promise<React.ReactNode> {
     throw new Error(`Expected an RSC response for "${routeTarget}".`);
   }
 
-  return await decodeRscStream(response.body);
+  const createFromReadableStream = await getCreateFromReadableStream();
+  return {
+    tree: createRscResponse(response.body, createFromReadableStream),
+  };
 }
 
 function routeTargetFromUrl(url: URL): string {
@@ -128,7 +141,7 @@ async function navigateTo(url: URL, mode: 'push' | 'restore', setTree: SetRscTre
   navigationVersion = version;
 
   try {
-    const node = await fetchRscNode(routeTargetFromUrl(url));
+    const { tree } = await fetchRscTree(routeTargetFromUrl(url));
     if (version !== navigationVersion) {
       return;
     }
@@ -139,7 +152,7 @@ async function navigateTo(url: URL, mode: 'push' | 'restore', setTree: SetRscTre
     }
 
     React.startTransition(() => {
-      setTree(node);
+      setTree({ status: 'pending', response: tree });
     });
   } catch (error) {
     if (mode === 'restore') {
@@ -177,8 +190,16 @@ function installRscNavigation(setTree: SetRscTree): () => void {
   };
 }
 
+function RscRouteSlot({ tree }: { tree: RscTree }) {
+  if (tree.status === 'ready') {
+    return tree.node;
+  }
+
+  return React.use(tree.response);
+}
+
 function MatchaRoot({ initialTree }: { initialTree: React.ReactNode }) {
-  const [tree, setTree] = React.useState(initialTree);
+  const [tree, setTree] = React.useState<RscTree>({ status: 'ready', node: initialTree });
 
   React.useEffect(() => {
     return installRscNavigation(setTree);
@@ -186,7 +207,9 @@ function MatchaRoot({ initialTree }: { initialTree: React.ReactNode }) {
 
   return (
     <div data-matcha-rsc-root>
-      {tree}
+      <React.Suspense fallback={<p data-matcha-route-pending>Loading route...</p>}>
+        <RscRouteSlot tree={tree} />
+      </React.Suspense>
     </div>
   );
 }

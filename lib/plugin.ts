@@ -444,7 +444,7 @@ export default function matcha(): Plugin {
       const ssrFunctionCode = `import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderRoutePayload } from './entry-rsc-server.js';
+import { renderRoutePayload, renderRoutePayloadStream } from './entry-rsc-server.js';
 import { renderRscDocument } from './entry-rsc-document.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -474,10 +474,10 @@ async function loadClientManifest() {
   return JSON.parse(file);
 }
 
-export async function renderRscPayload(routeTarget) {
+export async function renderRscPayloadStream(routeTarget) {
   const { target } = toRouteTarget(routeTarget);
   const manifest = await loadClientManifest();
-  return renderRoutePayload(target, manifest);
+  return renderRoutePayloadStream(target, manifest);
 }
 
 export async function renderRscPage(routeTarget) {

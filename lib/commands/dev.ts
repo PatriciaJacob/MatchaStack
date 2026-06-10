@@ -9,12 +9,21 @@ export const description = 'Start development server with HMR and RSC rendering'
 
 type DevClientManifest = ReturnType<typeof buildDevClientManifest>;
 
+interface FlightPipeableStream {
+  pipe: (destination: NodeJS.WritableStream) => void;
+  abort: () => void;
+}
+
 interface RscServerEntry {
   matchRscRoute: (routeTarget: string) => unknown;
   renderRoutePayload: (
     routeTarget: string,
     manifest: DevClientManifest,
   ) => Promise<string>;
+  renderRoutePayloadStream: (
+    routeTarget: string,
+    manifest: DevClientManifest,
+  ) => FlightPipeableStream;
 }
 
 interface RscDocumentEntry {
@@ -60,15 +69,28 @@ export async function run() {
     try {
       const { rscEntry, manifest } = await loadRscRuntime();
       const route = rscEntry.matchRscRoute(routeTarget);
-      const payload = await rscEntry.renderRoutePayload(routeTarget, manifest);
+      const stream = rscEntry.renderRoutePayloadStream(routeTarget, manifest);
 
       res
         .status(route ? 200 : 404)
         .set({
           'Content-Type': 'text/x-component; charset=utf-8',
           'Cache-Control': 'no-store',
-        })
-        .end(payload);
+        });
+
+      res.flushHeaders();
+
+      let completed = false;
+      res.on('finish', () => {
+        completed = true;
+      });
+      req.on('close', () => {
+        if (!completed) {
+          stream.abort();
+        }
+      });
+
+      stream.pipe(res);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       console.error(e);

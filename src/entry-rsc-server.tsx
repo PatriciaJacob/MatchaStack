@@ -7,6 +7,8 @@ import UserProfilePage from './rsc/UserProfilePage.js';
 import SuspenseDemoPage from './rsc/SuspenseDemoPage.js';
 import { ClientManifest } from './rsc/client-reference-runtime.js';
 
+type FlightPipeableStream = ReturnType<typeof renderToPipeableStream>;
+
 interface RscRoute {
   path: string;
   render: () => React.ReactNode;
@@ -50,7 +52,7 @@ async function renderFlightPayloadToString(
   model: React.ReactNode,
   moduleMap: ClientManifest['serverModuleMap'],
 ): Promise<string> {
-  const stream = renderToPipeableStream(model, moduleMap);
+  const stream = renderToFlightPayloadStream(model, moduleMap);
 
   return await new Promise((resolve, reject) => {
     const sink = new PassThrough();
@@ -68,6 +70,20 @@ async function renderFlightPayloadToString(
       reject(error);
     }
   });
+}
+
+function renderToFlightPayloadStream(
+  model: React.ReactNode,
+  moduleMap: ClientManifest['serverModuleMap'],
+): FlightPipeableStream {
+  return renderToPipeableStream(model, moduleMap);
+}
+
+export function renderRoutePayloadStream(
+  routeTarget: string,
+  manifest: ClientManifest,
+): FlightPipeableStream {
+  return renderToFlightPayloadStream(renderRoute(routeTarget), manifest.serverModuleMap);
 }
 
 export async function renderRoutePayload(
