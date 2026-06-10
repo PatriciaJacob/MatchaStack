@@ -27,11 +27,11 @@ interface RscServerEntry {
 }
 
 interface RscDocumentEntry {
-  renderRscDocument: (
+  renderRscDocumentStream: (
     template: string,
     manifest: DevClientManifest,
-    payload: string,
-  ) => Promise<string>;
+    flightStream: FlightPipeableStream,
+  ) => Promise<FlightPipeableStream>;
 }
 
 export async function run() {
@@ -109,10 +109,23 @@ export async function run() {
 
       const { rscEntry, rscDocumentEntry, manifest } = await loadRscRuntime();
       const route = rscEntry.matchRscRoute(url);
-      const payload = await rscEntry.renderRoutePayload(url, manifest);
-      const html = await rscDocumentEntry.renderRscDocument(template, manifest, payload);
+      const flightStream = rscEntry.renderRoutePayloadStream(url, manifest);
+      const documentStream = await rscDocumentEntry.renderRscDocumentStream(template, manifest, flightStream);
 
-      res.status(route ? 200 : 404).set({ 'Content-Type': 'text/html' }).end(html);
+      res.status(route ? 200 : 404).set({ 'Content-Type': 'text/html; charset=utf-8' });
+      res.flushHeaders();
+
+      let completed = false;
+      res.on('finish', () => {
+        completed = true;
+      });
+      req.on('close', () => {
+        if (!completed) {
+          documentStream.abort();
+        }
+      });
+
+      documentStream.pipe(res);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       console.error(e);

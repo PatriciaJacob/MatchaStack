@@ -325,17 +325,17 @@
           <div class="stage server">
             <h3>3. RSC Render</h3>
             <small>entry-rsc-server</small>
-            <p><code>renderRoutePayload(url, manifest)</code> renders the selected server component tree to Flight rows.</p>
+            <p><code>renderRoutePayloadStream(url, manifest)</code> starts streaming Flight rows for the selected server component tree.</p>
           </div>
           <div class="stage server">
             <h3>4. HTML Shell</h3>
             <small>entry-rsc-document</small>
-            <p>The server reads the Flight payload back into a React node and renders initial HTML.</p>
+            <p>The document renderer reads the Flight stream back into React and pipes the HTML shell as Suspense boundaries resolve.</p>
           </div>
           <div class="stage client">
             <h3>5. Bootstrap</h3>
             <small>inline script</small>
-            <p>The document embeds a browser manifest and a base64 Flight payload.</p>
+            <p>The full Flight payload is collected while streaming and appended as bootstrap state before the client entry script runs.</p>
           </div>
           <div class="stage client">
             <h3>6. Hydration</h3>
@@ -521,7 +521,7 @@ const user = {
           <article class="data-block">
             <header>
               <strong>Flight Payload Rows</strong>
-              <span>Text stream before base64 embedding</span>
+              <span>Text stream used by HTML and bootstrap</span>
             </header>
             <pre><code>7:I[
   "src/rsc/HomeCounter.client.tsx",
@@ -548,7 +548,7 @@ const user = {
           <article class="data-block">
             <header>
               <strong>HTML Bootstrap</strong>
-              <span>Inline document state</span>
+              <span>Appended after streamed HTML</span>
             </header>
             <pre><code>&lt;script&gt;
 window.__MATCHA_RSC_ENABLED__ = true;
@@ -558,7 +558,8 @@ window.__MATCHA_RSC_MANIFEST__ = {
   chunkMap
 };
 window.__MATCHA_RSC_PAYLOAD__ = "base64(Flight rows)";
-&lt;/script&gt;</code></pre>
+&lt;/script&gt;
+&lt;script type="module" src="/src/entry-client.tsx"&gt;&lt;/script&gt;</code></pre>
           </article>
 
           <article class="data-block">
@@ -578,7 +579,7 @@ const node = await createFromReadableStream(stream, {
   }
 });
 
-hydrateRoot(appRoot, node);</code></pre>
+hydrateRoot(appRoot, &lt;MatchaRoot initialTree={node} /&gt;);</code></pre>
           </article>
 
           <article class="data-block">
@@ -647,7 +648,7 @@ __webpack_require__(moduleId)
           <div class="stage server">
             <h3>/suspense-demo</h3>
             <small>Streaming Suspense demo</small>
-            <p>Async server component waits for 2 seconds inside Suspense; navigation shows the route while the slow panel fallback is pending.</p>
+            <p>Async server component waits for 2 seconds inside Suspense; document loads and client navigation both show the fallback while the slow panel is pending.</p>
           </div>
           <div class="stage server">
             <h3>404</h3>

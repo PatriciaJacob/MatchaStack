@@ -30,8 +30,8 @@ export default function SuspenseDemoPage() {
     <div>
       <h1>Suspense Demo</h1>
       <p>
-        This route has an async server component inside a Suspense boundary. Navigation
-        streams the Flight response, so the page can appear before the slow panel resolves.
+        This route has an async server component inside a Suspense boundary. Document
+        loads and client navigation both stream, so the page can appear before the slow panel resolves.
       </p>
 
       <Suspense fallback={<p data-testid="slow-panel-fallback">Loading slow server panel...</p>}>

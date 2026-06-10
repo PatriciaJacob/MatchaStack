@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MatchaStack RSC Navigation Flows</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17201b;
+        --muted: #5d6861;
+        --paper: #f8f5ee;
+        --panel: rgba(255, 255, 255, 0.55);
+        --line: #c9d0c5;
+        --server: #e4ece4;
+        --client: #e7edf6;
+        --stream: #e9e0d3;
+        --accent: #2f7d52;
+        --accent-2: #58739d;
+        --code: #18211c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      main {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 28px 68px;
+      }
+
+      header.hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+        gap: 34px;
+        align-items: end;
+        padding: 20px 0 34px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 780px;
+        font-size: clamp(42px, 7vw, 78px);
+        line-height: 0.95;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 0 0 18px;
+        font-size: 26px;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow: auto;
+        color: #f4fff7;
+        background: var(--code);
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .summary {
+        display: grid;
+        gap: 12px;
+      }
+
+      .summary-row {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      .summary-row strong {
+        font-size: 13px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.45);
+        font-size: 13px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .dot.server {
+        background: #6c8f74;
+      }
+
+      .dot.client {
+        background: #58739d;
+      }
+
+      .dot.stream {
+        background: #a87855;
+      }
+
+      .section {
+        padding-top: 44px;
+      }
+
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(145px, 1fr));
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .stage {
+        min-height: 180px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        position: relative;
+      }
+
+      .stage::after {
+        content: "->";
+        position: absolute;
+        right: -13px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .stage:last-child::after {
+        content: "";
+      }
+
+      .stage.server {
+        background: var(--server);
+      }
+
+      .stage.client {
+        background: var(--client);
+      }
+
+      .stage.stream {
+        background: var(--stream);
+      }
+
+      .stage small {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+
+      .stage p {
+        font-size: 14px;
+      }
+
+      .swimlanes {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 0;
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .lane-label {
+        padding: 16px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.5);
+        font-weight: 700;
+      }
+
+      .lane-label:last-of-type,
+      .lane-row:last-of-type {
+        border-bottom: 0;
+      }
+
+      .lane-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .lane-cell {
+        min-height: 88px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+      }
+
+      .lane-cell strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .lane-cell span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .step-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .detail-step {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .detail-step strong {
+        font-size: 14px;
+      }
+
+      .detail-step p {
+        font-size: 14px;
+      }
+
+      .code-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .data-block {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+
+      .data-block header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .data-block strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .data-block span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .callout {
+        margin-top: 18px;
+        padding: 16px 18px;
+        border-left: 4px solid var(--accent);
+        background: #d9eadf;
+      }
+
+      .callout p {
+        color: var(--ink);
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .event {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 16px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .event strong {
+        font-size: 14px;
+      }
+
+      .event p {
+        font-size: 14px;
+      }
+
+      @media (max-width: 1040px) {
+        header.hero,
+        .code-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .pipeline {
+          grid-template-columns: 1fr;
+        }
+
+        .stage::after {
+          content: "down";
+          right: 16px;
+          top: auto;
+          bottom: -20px;
+          transform: none;
+          font-size: 12px;
+        }
+
+        .swimlanes {
+          grid-template-columns: 1fr;
+        }
+
+        .lane-label {
+          border-right: 0;
+        }
+
+        .lane-row {
+          grid-template-columns: 1fr;
+        }
+
+        .detail-step {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <div>
+          <h1>RSC Navigation Data Flows</h1>
+          <div class="legend" aria-label="Legend">
+            <span class="tag"><span class="dot client"></span>Browser</span>
+            <span class="tag"><span class="dot server"></span>Server</span>
+            <span class="tag"><span class="dot stream"></span>Stream boundary</span>
+          </div>
+        </div>
+        <div class="summary">
+          <div class="summary-row">
+            <strong>Scope</strong>
+            <p>Two navigation paths: full document navigation and intercepted client navigation.</p>
+          </div>
+          <div class="summary-row">
+            <strong>Key idea</strong>
+            <p>Both paths start with Flight rows. Server navigation converts the Flight stream back into HTML plus bootstrap state; client navigation consumes the Flight stream directly in the browser.</p>
+          </div>
+        </div>
+      </header>
+
+      <section class="section">
+        <h2>1. Server Navigation Data Flow</h2>
+        <div class="pipeline">
+          <div class="stage client">
+            <h3>Document Request</h3>
+            <small>browser</small>
+            <p><code>GET /suspense-demo</code> asks for HTML. No client router is involved because this is a reload or direct URL entry.</p>
+          </div>
+          <div class="stage server">
+            <h3>Route Handler</h3>
+            <small><code>lib/commands/dev.ts</code> or <code>serve.ts</code></small>
+            <p>The catch-all route loads the HTML template, RSC runtime, and manifest, then checks <code>matchRscRoute(url)</code> for the response status.</p>
+          </div>
+          <div class="stage stream">
+            <h3>Flight Stream</h3>
+            <small><code>entry-rsc-server</code></small>
+            <p><code>renderRoutePayloadStream(url, manifest)</code> calls RSDW <code>renderToPipeableStream(routeNode, serverModuleMap)</code>.</p>
+          </div>
+          <div class="stage server">
+            <h3>Document Stream</h3>
+            <small><code>entry-rsc-document</code></small>
+            <p><code>renderRscDocumentStream(...)</code> decodes the Flight stream with <code>createFromNodeStream</code> and renders an HTML stream with React DOM.</p>
+          </div>
+          <div class="stage stream">
+            <h3>HTML Response</h3>
+            <small><code>res</code></small>
+            <p>The server writes the template before the outlet, pipes React HTML chunks, then appends bootstrap state and module scripts at the end.</p>
+          </div>
+          <div class="stage client">
+            <h3>Hydration</h3>
+            <small><code>entry-client</code></small>
+            <p>The browser reads the appended base64 Flight payload, recreates the RSC tree, and hydrates <code>MatchaRoot</code>.</p>
+          </div>
+        </div>
+
+        <div class="step-list" aria-label="How Flight becomes HTML">
+          <div class="detail-step">
+            <strong>1. Prepare client references</strong>
+            <p>The document renderer installs the same webpack-compatible client reference runtime used by RSC decoding. On the server, <code>__webpack_chunk_load__(moduleId)</code> resolves through <code>manifest.ssrChunkMap</code>, so client components can be represented during server HTML rendering without executing browser-only code.</p>
+          </div>
+          <div class="detail-step">
+            <strong>2. Create a readable Flight input</strong>
+            <p><code>renderRoutePayloadStream(...)</code> returns a pipeable Flight producer. <code>renderRscDocumentStream(...)</code> creates a <code>PassThrough</code> named <code>flightReadable</code>, then calls <code>flightStream.pipe(flightReadable)</code>. That converts the producer into the Node readable stream shape expected by <code>createFromNodeStream</code>.</p>
+          </div>
+          <div class="detail-step">
+            <strong>3. Start decoding Flight</strong>
+            <p><code>createFromNodeStream(flightReadable, manifest)</code> does not produce HTML. It produces a promise for the React model represented by the Flight rows. As rows arrive, React can discover the root tree, client references, Suspense boundaries, and deferred placeholders such as <code>$L8</code>.</p>
+          </div>
+          <div class="detail-step">
+            <strong>4. Preserve the same rows for hydration</strong>
+            <p>The current implementation also calls <code>collectPayload(flightReadable)</code>. That records the exact UTF-8 Flight rows while they pass through the document renderer. At the end of the response those rows are base64 encoded into <code>window.__MATCHA_RSC_PAYLOAD__</code>, letting the browser hydrate from the same RSC payload the server used for HTML.</p>
+          </div>
+          <div class="detail-step">
+            <strong>5. Render a React HTML stream</strong>
+            <p>The document renderer passes a small wrapper tree to React DOM: <code>&lt;RscDocumentRoot&gt;&lt;RscDocumentResponse response={response} /&gt;&lt;/RscDocumentRoot&gt;</code>. <code>RscDocumentResponse</code> calls <code>React.use(response)</code>. If the Flight response has enough rows for the shell but not enough for a nested async component, React DOM emits the shell plus that component's Suspense fallback.</p>
+          </div>
+          <div class="detail-step">
+            <strong>6. Pipe shell output to the HTTP response</strong>
+            <p>The returned object does not write immediately. When Express calls <code>documentStream.pipe(res)</code>, the document renderer writes the template prefix, starts <code>renderToPipeableStream</code>, and waits for <code>onShellReady</code>. At that point React DOM output is piped through <code>reactOutput</code> into the HTTP response.</p>
+          </div>
+          <div class="detail-step">
+            <strong>7. Finish with bootstrap state</strong>
+            <p>When React DOM ends, the renderer waits for <code>payloadPromise</code>, creates the bootstrap script, appends the saved module scripts, and calls <code>destination.end(...)</code>. The module entry runs after <code>window.__MATCHA_RSC_PAYLOAD__</code> exists, avoiding the previous hydration race.</p>
+          </div>
+          <div class="detail-step">
+            <strong>8. Abort both sides together</strong>
+            <p>If the browser disconnects, Express calls <code>documentStream.abort()</code>. That aborts the original Flight producer, aborts the React DOM stream if it has started, and destroys the <code>PassThrough</code> so the decode path does not keep reading orphaned work.</p>
+          </div>
+        </div>
+
+        <div class="swimlanes" aria-label="Server navigation stream piping">
+          <div class="lane-label">HTTP socket</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>Headers flush</strong><span><code>Content-Type: text/html</code> is sent before the slow server component resolves.</span></div>
+            <div class="lane-cell"><strong>Template prefix</strong><span><code>&lt;html&gt;...&lt;div id="app"&gt;</code> is written directly to <code>res</code>.</span></div>
+            <div class="lane-cell"><strong>React HTML chunks</strong><span>Fallback HTML for Suspense can reach the browser while Flight is still pending.</span></div>
+            <div class="lane-cell"><strong>Bootstrap suffix</strong><span>After the full Flight payload is collected, bootstrap state and module scripts are appended.</span></div>
+          </div>
+          <div class="lane-label">Flight pipe</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>RSC renderer</strong><span><code>renderToPipeableStream</code> emits Flight rows like <code>$Sreact.suspense</code> and <code>$L8</code>.</span></div>
+            <div class="lane-cell"><strong>PassThrough</strong><span><code>flightStream.pipe(flightReadable)</code> gives the document renderer a Node readable stream.</span></div>
+            <div class="lane-cell"><strong>HTML decode</strong><span><code>createFromNodeStream(flightReadable)</code> produces the React node promise used by <code>React.use</code>.</span></div>
+            <div class="lane-cell"><strong>Bootstrap copy</strong><span>The same stream is collected into UTF-8 text so the client can hydrate from identical Flight rows.</span></div>
+          </div>
+          <div class="lane-label">React HTML pipe</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>Root shape</strong><span>Server HTML uses <code>&lt;RscDocumentRoot&gt;</code>, matching the browser <code>MatchaRoot</code> wrapper.</span></div>
+            <div class="lane-cell"><strong>Suspense read</strong><span><code>&lt;RscDocumentResponse response={response} /&gt;</code> calls <code>React.use(response)</code>.</span></div>
+            <div class="lane-cell"><strong>Shell ready</strong><span><code>onShellReady</code> pipes React DOM output through <code>reactOutput</code>.</span></div>
+            <div class="lane-cell"><strong>Abort path</strong><span>If the request closes early, the Express handler aborts both the Flight stream and HTML stream.</span></div>
+          </div>
+        </div>
+
+        <div class="code-grid">
+          <article class="data-block">
+            <header>
+              <strong>Express document path</strong>
+              <span>Server navigation entry point</span>
+            </header>
+            <pre><code>const flightStream =
+  rscEntry.renderRoutePayloadStream(url, manifest);
+
+const documentStream =
+  await rscDocumentEntry.renderRscDocumentStream(
+    template,
+    manifest,
+    flightStream
+  );
+
+res.status(route ? 200 : 404);
+res.set({ "Content-Type": "text/html; charset=utf-8" });
+res.flushHeaders();
+documentStream.pipe(res);</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Document stream internals</strong>
+              <span>Flight to HTML plus bootstrap</span>
+            </header>
+            <pre><code>const flightReadable = new PassThrough();
+const payloadPromise = collectPayload(flightReadable);
+const response = createFromNodeStream(flightReadable, manifest);
+
+flightStream.pipe(flightReadable);
+destination.write(beforeOutlet);
+
+renderToPipeableStream(
+  &lt;RscDocumentRoot&gt;
+    &lt;RscDocumentResponse response={response} /&gt;
+  &lt;/RscDocumentRoot&gt;,
+  {
+    onShellReady() {
+      htmlStream.pipe(reactOutput);
+    }
+  }
+);</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Early HTML shape</strong>
+              <span>Before the slow panel resolves</span>
+            </header>
+            <pre><code>&lt;div id="app"&gt;
+  &lt;div data-matcha-rsc-root="true"&gt;
+    &lt;!--$--&gt;
+    &lt;div&gt;
+      &lt;h1&gt;Suspense Demo&lt;/h1&gt;
+      &lt;!--$?--&gt;
+      &lt;template id="B:0"&gt;&lt;/template&gt;
+      &lt;p data-testid="slow-panel-fallback"&gt;
+        Loading slow server panel...
+      &lt;/p&gt;
+      &lt;!--/$--&gt;
+    &lt;/div&gt;
+    &lt;!--/$--&gt;
+  &lt;/div&gt;</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Final document suffix</strong>
+              <span>Bootstrap runs before client entry</span>
+            </header>
+            <pre><code>&lt;script&gt;
+window.__MATCHA_RSC_ENABLED__ = true;
+window.__MATCHA_RSC_MANIFEST__ = { moduleMap, serverModuleMap, chunkMap };
+window.__MATCHA_RSC_PAYLOAD__ = "base64(complete Flight rows)";
+&lt;/script&gt;
+
+&lt;script type="module" src="/src/entry-client.tsx"&gt;&lt;/script&gt;</code></pre>
+          </article>
+        </div>
+
+        <div class="callout">
+          <p>Server navigation no longer waits to send HTML. It still waits to hydrate, because the current bootstrap format appends a complete base64 Flight payload at the end of the document.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>2. Client Navigation Data Flow</h2>
+        <div class="pipeline">
+          <div class="stage client">
+            <h3>Click Gate</h3>
+            <small><code>entry-client</code></small>
+            <p>A same-origin unmodified link click is intercepted. External links, downloads, targets, and hash-only jumps are ignored.</p>
+          </div>
+          <div class="stage client">
+            <h3>Flight Fetch</h3>
+            <small><code>fetch</code></small>
+            <p>The browser requests <code>/__matcha_rsc?path=/about</code> with <code>Accept: text/x-component</code>.</p>
+          </div>
+          <div class="stage server">
+            <h3>Endpoint</h3>
+            <small><code>app.get("/__matcha_rsc")</code></small>
+            <p>The endpoint loads the RSC runtime and manifest, sets <code>text/x-component</code>, flushes headers, and pipes Flight rows directly.</p>
+          </div>
+          <div class="stage stream">
+            <h3>ReadableStream</h3>
+            <small>browser response body</small>
+            <p><code>createFromReadableStream(response.body)</code> starts decoding before the full Flight payload has arrived.</p>
+          </div>
+          <div class="stage client">
+            <h3>Pending Tree</h3>
+            <small><code>MatchaRoot</code></small>
+            <p>The RSC response promise is stored as <code>{ status: "pending", response }</code> instead of being awaited by navigation.</p>
+          </div>
+          <div class="stage client">
+            <h3>Reveal</h3>
+            <small>React Suspense</small>
+            <p><code>RscRouteSlot</code> calls <code>React.use(response)</code>. Suspense shows fallbacks until streamed rows resolve.</p>
+          </div>
+        </div>
+
+        <div class="swimlanes" aria-label="Client navigation stream piping">
+          <div class="lane-label">Browser event</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>Click</strong><span><code>shouldHandleLinkClick(event)</code> parses the target URL.</span></div>
+            <div class="lane-cell"><strong>Prevent default</strong><span>The document request is cancelled for eligible same-origin routes.</span></div>
+            <div class="lane-cell"><strong>Versioning</strong><span><code>navigationVersion</code> prevents older responses from winning a later navigation.</span></div>
+            <div class="lane-cell"><strong>History</strong><span><code>pushState</code> commits the visible URL after the Flight response has started.</span></div>
+          </div>
+          <div class="lane-label">Flight response</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>Headers</strong><span><code>text/x-component</code> confirms the response can be decoded as Flight.</span></div>
+            <div class="lane-cell"><strong>Stream body</strong><span>The body stays as a browser <code>ReadableStream&lt;Uint8Array&gt;</code>.</span></div>
+            <div class="lane-cell"><strong>Decode</strong><span><code>createFromReadableStream</code> receives <code>moduleMap</code>, <code>serverModuleMap</code>, and <code>moduleLoading: null</code>.</span></div>
+            <div class="lane-cell"><strong>Client refs</strong><span><code>__webpack_chunk_load__</code> imports client chunks from <code>chunkMap</code>.</span></div>
+          </div>
+          <div class="lane-label">React render</div>
+          <div class="lane-row">
+            <div class="lane-cell"><strong>Transition</strong><span><code>startTransition</code> updates the route tree without tearing down the root.</span></div>
+            <div class="lane-cell"><strong>Outer fallback</strong><span><code>Loading route...</code> covers a route that has not produced its root row yet.</span></div>
+            <div class="lane-cell"><strong>Inner fallback</strong><span>Route-owned Suspense boundaries, like the slow panel fallback, can render while later rows are pending.</span></div>
+            <div class="lane-cell"><strong>Abort path</strong><span>If the client disconnects, the server aborts the Flight pipe on request close.</span></div>
+          </div>
+        </div>
+
+        <div class="code-grid">
+          <article class="data-block">
+            <header>
+              <strong>Client fetch</strong>
+              <span>Preserve the RSC promise</span>
+            </header>
+            <pre><code>async function fetchRscTree(routeTarget) {
+  const response = await fetch(endpoint, {
+    headers: { Accept: "text/x-component" }
+  });
+
+  const createFromReadableStream =
+    await getCreateFromReadableStream();
+
+  return {
+    tree: createFromReadableStream(response.body, {
+      serverConsumerManifest
+    })
+  };
+}</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Navigation commit</strong>
+              <span>Do not await the tree</span>
+            </header>
+            <pre><code>const { tree } = await fetchRscTree(routeTarget);
+
+history.pushState({ __matchaRsc: true }, "", url);
+scrollTo({ left: 0, top: 0 });
+
+startTransition(() =&gt; {
+  setTree({ status: "pending", response: tree });
+});</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Client root</strong>
+              <span>Shared Suspense shell</span>
+            </header>
+            <pre><code>function MatchaRoot({ initialTree }) {
+  const [tree, setTree] = useState({
+    status: "ready",
+    node: initialTree
+  });
+
+  return (
+    &lt;div data-matcha-rsc-root&gt;
+      &lt;Suspense fallback={&lt;p&gt;Loading route...&lt;/p&gt;}&gt;
+        &lt;RscRouteSlot tree={tree} /&gt;
+      &lt;/Suspense&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+          </article>
+
+          <article class="data-block">
+            <header>
+              <strong>Flight endpoint</strong>
+              <span>Raw RSC stream</span>
+            </header>
+            <pre><code>const stream =
+  rscEntry.renderRoutePayloadStream(routeTarget, manifest);
+
+res.status(route ? 200 : 404);
+res.set({
+  "Content-Type": "text/x-component; charset=utf-8",
+  "Cache-Control": "no-store"
+});
+res.flushHeaders();
+stream.pipe(res);</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Timing Model</h2>
+        <div class="timeline">
+          <div class="event">
+            <strong>t = 0ms</strong>
+            <p>Request starts. Server creates a Flight pipeable stream for the route.</p>
+          </div>
+          <div class="event">
+            <strong>t ~= 1-30ms</strong>
+            <p>Headers and first chunks flush. Server navigation sends early HTML with Suspense fallback; client navigation sends early Flight rows.</p>
+          </div>
+          <div class="event">
+            <strong>t ~= 2000ms</strong>
+            <p>The slow server component resolves. RSC emits the deferred row; React DOM emits the resolved HTML patch for document navigation.</p>
+          </div>
+          <div class="event">
+            <strong>after stream end</strong>
+            <p>Server navigation appends the complete base64 Flight payload and client entry script. Client navigation already decoded directly from the response stream.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
